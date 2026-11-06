@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="从采样回报、状态价值到 Actor-Critic 的强化学习学习笔记。">
+  <title>从回报到 Actor-Critic · RL 学习笔记</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f5f0;
+      --paper: #fffefa;
+      --paper-2: #f8faf6;
+      --ink: #17232d;
+      --muted: #68737a;
+      --line: #e1e6df;
+      --accent: #1d756d;
+      --accent-strong: #125c56;
+      --accent-soft: #e5f2ed;
+      --blue: #3e6f9e;
+      --orange: #cf7a2e;
+      --shadow: 0 22px 70px rgba(30, 48, 44, .09);
+      --radius: 22px;
+      --math: "STIX Two Math", "Cambria Math", "Latin Modern Math", serif;
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #111a1b;
+      --paper: #172223;
+      --paper-2: #1c2b2a;
+      --ink: #edf5ef;
+      --muted: #a9b9b1;
+      --line: #2c403d;
+      --accent: #76c8b8;
+      --accent-strong: #a2e0d1;
+      --accent-soft: #1f3b37;
+      --blue: #9cc4e7;
+      --orange: #f1b56f;
+      --shadow: 0 22px 70px rgba(0, 0, 0, .22);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(205, 231, 218, .72), transparent 32rem),
+        radial-gradient(circle at 95% 12%, rgba(246, 224, 195, .42), transparent 30rem),
+        var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.78;
+      transition: background .25s ease, color .25s ease;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      z-index: 20;
+      inset: 0 auto auto 0;
+      width: var(--read-progress, 0%);
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--orange));
+      box-shadow: 0 1px 12px rgba(29, 117, 109, .35);
+    }
+
+    a { color: inherit; }
+
+    .site-header {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 26px 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      color: #fff;
+      background: var(--accent);
+      border-radius: 11px;
+      font-size: 15px;
+      letter-spacing: -.06em;
+      box-shadow: 0 8px 20px rgba(29, 117, 109, .24);
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
+    .action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 7px 13px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--paper) 86%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font: inherit;
+      font-size: 13px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: color .2s ease, border-color .2s ease, transform .2s ease, background .2s ease;
+    }
+
+    .action:hover, .action:focus-visible {
+      color: var(--accent-strong);
+      border-color: var(--accent);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    .page-shell {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto 56px;
+      background: color-mix(in srgb, var(--paper) 93%, transparent);
+      border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.28fr) minmax(290px, .72fr);
+      gap: 42px;
+      padding: 76px clamp(28px, 7vw, 84px) 68px;
+      border-bottom: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 380px;
+      height: 380px;
+      right: -140px;
+      bottom: -200px;
+      border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+      border-radius: 50%;
+      box-shadow: 0 0 0 42px color-mix(in srgb, var(--accent) 7%, transparent), 0 0 0 84px color-mix(in srgb, var(--accent) 4%, transparent);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 18px;
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 26px;
+      height: 2px;
+      background: var(--orange);
+      border-radius: 999px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 11ch;
+      margin-bottom: 22px;
+      font-size: clamp(39px, 5.5vw, 70px);
+      line-height: 1.08;
+      letter-spacing: -.065em;
+    }
+
+    .hero-lead {
+      max-width: 650px;
+      margin-bottom: 27px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.8;
+    }
+
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 9px; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 31px;
+      padding: 4px 11px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .hero-card {
+      position: relative;
+      z-index: 1;
+      align-self: end;
+      padding: 22px;
+      background: linear-gradient(145deg, var(--accent-soft), var(--paper-2));
+      border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+      border-radius: 24px;
+    }
+
+    .hero-card-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .hero-signal {
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      margin-bottom: 25px;
+    }
+
+    .hero-signal strong {
+      color: var(--accent-strong);
+      font-family: var(--math);
+      font-size: 64px;
+      font-weight: 500;
+      line-height: .9;
+    }
+
+    .hero-signal span { max-width: 13ch; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .mini-stat { padding: 12px 10px; background: color-mix(in srgb, var(--paper) 62%, transparent); border-radius: 15px; }
+    .mini-stat strong { display: block; color: var(--ink); font-size: 20px; line-height: 1.1; }
+    .mini-stat span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .toc {
+      align-self: start;
+      position: sticky;
+      top: 16px;
+      margin: 28px 0 28px 28px;
+      padding: 20px 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--paper-2) 86%, transparent);
+    }
+
+    .toc-title {
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+
+    .toc ol { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+    .toc a { display: block; padding: 7px 9px; color: var(--muted); border-radius: 9px; font-size: 13px; line-height: 1.45; text-decoration: none; transition: color .2s ease, background .2s ease; }
+    .toc a:hover, .toc a:focus-visible, .toc a.active { color: var(--accent-strong); background: var(--accent-soft); outline: none; }
+    .toc .toc-kicker { margin-top: 11px; padding-left: 9px; color: var(--orange); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+
+    article { min-width: 0; padding: 48px clamp(28px, 6vw, 76px) 76px 48px; }
+
+    .intro-card {
+      margin-bottom: 46px;
+      padding: 25px 27px 27px;
+      background: linear-gradient(135deg, var(--accent-soft), var(--paper-2));
+      border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+      border-radius: var(--radius);
+    }
+
+    .intro-card h2 { margin-bottom: 10px; font-size: 21px; letter-spacing: -.02em; }
+    .intro-card p { margin-bottom: 22px; color: var(--muted); }
+
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-items: stretch; }
+    .flow-step { position: relative; min-height: 76px; padding: 13px 11px; background: color-mix(in srgb, var(--paper) 73%, transparent); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 14px; }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; z-index: 1; top: 24px; right: -13px; color: var(--orange); font-size: 18px; font-weight: 700; }
+    .flow-step small { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .flow-step strong { color: var(--ink); font-size: 13px; line-height: 1.35; }
+
+    .section { scroll-margin-top: 30px; padding-top: 10px; }
+    .section + .section { margin-top: 58px; }
+
+    .section-kicker { margin-bottom: 8px; color: var(--accent); font-size: 11px; font-weight: 850; letter-spacing: .16em; text-transform: uppercase; }
+    .section h2 { margin-bottom: 14px; font-size: clamp(25px, 3vw, 34px); line-height: 1.22; letter-spacing: -.045em; }
+    .section h3 { margin: 30px 0 10px; color: var(--ink); font-size: 18px; line-height: 1.35; }
+    .section p { color: var(--muted); }
+    .section p strong { color: var(--ink); }
+
+    .equation {
+      display: block;
+      max-width: 100%;
+      margin: 21px 0 24px;
+      padding: 20px 18px;
+      overflow-x: auto;
+      color: var(--ink);
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--blue);
+      border-radius: 14px;
+      text-align: center;
+    }
+
+    math { font-family: var(--math); font-size: 1.18em; }
+
+    .clean-list { display: grid; gap: 9px; margin: 16px 0 22px; padding: 0; list-style: none; }
+    .clean-list li { position: relative; padding-left: 25px; color: var(--muted); }
+    .clean-list li::before { content: ""; position: absolute; top: .78em; left: 2px; width: 8px; height: 8px; background: var(--orange); border-radius: 50%; }
+
+    .callout { margin: 22px 0; padding: 17px 19px; color: var(--muted); background: color-mix(in srgb, var(--accent-soft) 62%, var(--paper)); border-left: 4px solid var(--accent); border-radius: 0 14px 14px 0; }
+    .callout strong { display: block; margin-bottom: 4px; color: var(--accent-strong); font-size: 13px; }
+
+    .example-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 20px 0 25px; }
+    .example { padding: 18px 18px 15px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 16px; }
+    .example-label { margin-bottom: 9px; color: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .example p { margin: 9px 0 0; font-size: 13px; }
+    .example .equation { margin: 8px 0 0; padding: 9px; border: 0; background: transparent; }
+    .example math { font-size: 1.05em; }
+
+    .loss-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 21px; }
+    .loss-card { padding: 20px; border: 1px solid var(--line); border-radius: 17px; background: var(--paper-2); }
+    .loss-card h3 { margin: 0 0 7px; font-size: 16px; }
+    .loss-card p { margin-bottom: 0; font-size: 13px; }
+    .loss-card .equation { margin: 12px -3px 12px; padding: 12px 7px; background: var(--paper); }
+
+    .method-table { width: 100%; margin: 22px 0 25px; border-collapse: collapse; font-size: 13px; }
+    .method-table th, .method-table td { padding: 12px 11px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    .method-table th { color: var(--accent-strong); background: var(--accent-soft); font-size: 11px; letter-spacing: .04em; }
+    .method-table td { color: var(--muted); }
+    .method-table td:first-child { color: var(--ink); font-weight: 750; }
+
+    .derivation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 22px 0; }
+    .derivation-card { padding: 17px 17px 15px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-2); }
+    .derivation-card h3 { margin: 0 0 7px; font-size: 15px; }
+    .derivation-card p { margin-bottom: 0; font-size: 13px; }
+
+    .weight-figure { margin: 26px 0 28px; padding: 20px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 18px; }
+    .weight-figure figcaption { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    .weight-figure svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .weight-figure .axis { stroke: var(--line); stroke-width: 1; }
+    .weight-figure .bar-main { fill: var(--accent); }
+    .weight-figure .bar-fade { fill: color-mix(in srgb, var(--accent) 48%, transparent); }
+    .weight-figure text { fill: var(--ink); font-family: Inter, ui-sans-serif, sans-serif; font-size: 12px; }
+    .weight-figure .muted-label { fill: var(--muted); font-size: 11px; }
+    .weight-figure .sum-box { fill: var(--accent-soft); stroke: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+
+    .lambda-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 15px; }
+    .lambda-item { padding: 11px 12px; border-top: 3px solid var(--accent); background: var(--paper); border-radius: 0 0 11px 11px; }
+    .lambda-item strong { display: block; margin-bottom: 3px; color: var(--accent-strong); font-size: 14px; }
+    .lambda-item span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .subscript { white-space: nowrap; }
+
+    .ppo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 22px 0 25px; }
+    .ppo-card { padding: 18px 18px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-2); }
+    .ppo-card.positive { border-top: 3px solid var(--accent); }
+    .ppo-card.negative { border-top: 3px solid var(--orange); }
+    .ppo-card h3 { margin: 0 0 8px; font-size: 16px; }
+    .ppo-card p { margin-bottom: 0; font-size: 13px; }
+
+    .ratio-figure { margin: 26px 0 28px; padding: 20px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 18px; }
+    .ratio-figure figcaption { margin: 0 0 15px; color: var(--muted); font-size: 13px; }
+    .ratio-figure svg { display: block; width: 100%; height: auto; }
+    .ratio-figure .grid-line { stroke: var(--line); stroke-width: 1; }
+    .ratio-figure .positive-line { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+    .ratio-figure .negative-line { fill: none; stroke: var(--orange); stroke-width: 4; stroke-linecap: round; }
+    .ratio-figure .clip-zone { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .ratio-figure text { fill: var(--ink); font-family: Inter, ui-sans-serif, sans-serif; font-size: 12px; }
+    .ratio-figure .muted-label { fill: var(--muted); font-size: 11px; }
+
+    .ppo-flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 22px 0 26px; }
+    .ppo-flow-step { position: relative; min-height: 94px; padding: 13px 11px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 14px; }
+    .ppo-flow-step:not(:last-child)::after { content: "→"; position: absolute; top: 31px; right: -14px; color: var(--orange); font-size: 18px; font-weight: 750; }
+    .ppo-flow-step small { display: block; margin-bottom: 6px; color: var(--accent); font-size: 10px; font-weight: 850; letter-spacing: .1em; }
+    .ppo-flow-step strong { display: block; color: var(--ink); font-size: 13px; line-height: 1.35; }
+    .ppo-flow-step span { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+
+    .summary-card { margin-top: 60px; padding: 25px 27px; color: #fff; background: linear-gradient(135deg, #164c49, #1f756c); border-radius: var(--radius); box-shadow: 0 18px 36px rgba(23, 97, 88, .2); }
+    .summary-card h2 { margin-bottom: 10px; font-size: 23px; letter-spacing: -.03em; }
+    .summary-card p { margin-bottom: 0; color: rgba(255,255,255,.82); }
+    .summary-card strong { color: #fff; }
+
+    .article-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 46px; padding-top: 20px; color: var(--muted); border-top: 1px solid var(--line); font-size: 12px; }
+    .back-top { color: var(--accent-strong); text-decoration: none; font-weight: 750; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; gap: 25px; padding-top: 56px; }
+      .hero-card { max-width: 470px; }
+      .content-grid { grid-template-columns: 1fr; }
+      .toc { position: static; margin: 20px 20px 0; }
+      .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      article { padding-left: 28px; }
+    }
+
+    @media (max-width: 620px) {
+      body { font-size: 15px; }
+      .site-header, .page-shell { width: min(100% - 20px, 1180px); }
+      .site-header { padding-top: 16px; }
+      .header-actions .action span { display: none; }
+      .hero { padding: 44px 22px 44px; }
+      h1 { font-size: 43px; }
+      .hero-lead { font-size: 16px; }
+      .mini-stats { gap: 5px; }
+      .mini-stat { padding: 10px 7px; }
+      .toc { margin: 15px 15px 0; padding: 15px 13px; }
+      .toc ol { grid-template-columns: 1fr; }
+      article { padding: 36px 20px 56px; }
+      .intro-card { padding: 20px; }
+      .flow { grid-template-columns: 1fr; gap: 8px; }
+      .flow-step { min-height: auto; }
+      .flow-step:not(:last-child)::after { top: auto; right: auto; bottom: -15px; left: 50%; transform: rotate(90deg); }
+      .example-grid, .loss-grid, .derivation-grid, .ppo-grid { grid-template-columns: 1fr; }
+      .method-table { display: block; overflow-x: auto; }
+      .lambda-strip { grid-template-columns: 1fr; }
+      .ppo-flow { grid-template-columns: 1fr; }
+      .ppo-flow-step { min-height: auto; }
+      .ppo-flow-step:not(:last-child)::after { top: auto; right: auto; bottom: -15px; left: 50%; transform: rotate(90deg); }
+      .article-footer { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media print {
+      body, .page-shell { background: #fff; box-shadow: none; }
+      .site-header, .toc, .header-actions, .back-top { display: none; }
+      .page-shell { width: 100%; margin: 0; border: 0; }
+      .hero { padding: 30px 0; }
+      .content-grid { display: block; }
+      article { padding: 30px 0; }
+    }
+  </style>
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="返回页面顶部">
+      <span class="brand-mark">RL</span>
+      <span>Learning Notes</span>
+    </a>
+    <div class="header-actions">
+      <a class="action" href="RL学习笔记.md" download aria-label="下载 Markdown 笔记">↓ <span>Markdown</span></a>
+      <button class="action" id="theme-toggle" type="button" aria-label="切换深色模式">◐ <span>主题</span></button>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div>
+        <div class="eyebrow">Reinforcement Learning · 01</div>
+        <h1 id="page-title">从回报到 Actor-Critic</h1>
+        <p class="hero-lead">一份把采样轨迹、回报、价值函数和优势函数串起来的学习笔记。先理解“动作比当前状态的平均水平好多少”，再看 Actor 和 Critic 如何协作。</p>
+        <div class="hero-meta" aria-label="文章标签">
+          <span class="tag">Policy Gradient</span>
+          <span class="tag">Value Function</span>
+          <span class="tag">Advantage</span>
+        </div>
+      </div>
+      <div class="hero-card" aria-label="笔记概览">
+        <div class="hero-card-label"><span>Study map</span><span>01 / 18</span></div>
+        <div class="hero-signal"><strong>A → PPO</strong><span>从优势估计走向受限更新，策略学习更稳。</span></div>
+        <div class="mini-stats">
+          <div class="mini-stat"><strong>18</strong><span>核心章节</span></div>
+          <div class="mini-stat"><strong>28</strong><span>关键公式</span></div>
+          <div class="mini-stat"><strong>01</strong><span>联合目标</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="content-grid">
+      <aside class="toc" aria-label="文章目录">
+        <div class="toc-title">On this page</div>
+        <ol>
+          <li class="toc-kicker">Start here</li>
+          <li><a href="#trajectory">01 · 采样轨迹</a></li>
+          <li><a href="#return">02 · 累计回报</a></li>
+          <li><a href="#baseline">03 · 状态价值</a></li>
+          <li class="toc-kicker">Build the loop</li>
+          <li><a href="#td">04 · TD</a></li>
+          <li><a href="#gae-map">05 · G / TD / GAE</a></li>
+          <li><a href="#nstep">06 · n-step</a></li>
+          <li><a href="#cancellation">07 · gamma 抵消</a></li>
+          <li><a href="#gae">08 · GAE 加权</a></li>
+          <li><a href="#actor">09 · Actor</a></li>
+          <li><a href="#critic">10 · Critic</a></li>
+          <li><a href="#joint">11 · 联合优化</a></li>
+          <li class="toc-kicker">PPO next</li>
+          <li><a href="#ppo-problem">12 · 限制更新</a></li>
+          <li><a href="#ratio">13 · 概率比</a></li>
+          <li><a href="#clip">14 · Clipping</a></li>
+          <li><a href="#ppo-sign">15 · 正负 Advantage</a></li>
+          <li><a href="#ppo-loss">16 · PPO 损失</a></li>
+          <li><a href="#ppo-reuse">16a · 多次更新</a></li>
+          <li><a href="#entropy">16b · 熵正则</a></li>
+          <li><a href="#ppo-loop">17 · 更新流程</a></li>
+          <li><a href="#ppo-map">18 · 关系总览</a></li>
+        </ol>
+      </aside>
+
+      <article>
+        <section class="intro-card" aria-labelledby="thread-title">
+          <h2 id="thread-title">先抓住这条主线</h2>
+          <p>一条轨迹提供经验，回报衡量结果，状态价值提供基准，优势函数把“结果好不好”转换成“这个动作值不值得增加概率”。</p>
+          <div class="flow" aria-label="强化学习更新主线">
+            <div class="flow-step"><small>01</small><strong>采样轨迹</strong></div>
+            <div class="flow-step"><small>02</small><strong>计算回报 G<sub>t</sub></strong></div>
+            <div class="flow-step"><small>03</small><strong>估计 V(s<sub>t</sub>)</strong></div>
+            <div class="flow-step"><small>04</small><strong>得到优势 A<sub>t</sub></strong></div>
+            <div class="flow-step"><small>05</small><strong>更新 Actor</strong></div>
+          </div>
+        </section>
+
+        <section class="section" id="trajectory" aria-labelledby="trajectory-title">
+          <div class="section-kicker">01 · Start with experience</div>
+          <h2 id="trajectory-title">采样轨迹与基本符号</h2>
+          <p>设一条采样轨迹为：</p>
+          <div class="equation">
+            <math display="block" aria-label="s_0 到 s_T 的采样轨迹">
+              <msub><mi>s</mi><mn>0</mn></msub><mover><mo>→</mo><mrow><msub><mi>a</mi><mn>0</mn></msub><mo>,</mo><msub><mi>r</mi><mn>0</mn></msub></mrow></mover>
+              <msub><mi>s</mi><mn>1</mn></msub><mover><mo>→</mo><mrow><msub><mi>a</mi><mn>1</mn></msub><mo>,</mo><msub><mi>r</mi><mn>1</mn></msub></mrow></mover>
+              <msub><mi>s</mi><mn>2</mn></msub><mo>→</mo><mo>⋯</mo><mo>→</mo><msub><mi>s</mi><mi>T</mi></msub>
+            </math>
+          </div>
+          <ul class="clean-list">
+            <li><i>s</i><sub>t</sub> 是第 <i>t</i> 时刻的状态。</li>
+            <li><i>a</i><sub>t</sub> 是策略在 <i>s</i><sub>t</sub> 下采取的动作。</li>
+            <li><i>r</i><sub>t</sub> 是执行 <i>a</i><sub>t</sub> 后获得的即时奖励。</li>
+            <li>π<sub>θ</sub>(<i>a</i> | <i>s</i>) 是参数为 θ 的策略。</li>
+          </ul>
+          <div class="callout"><strong>读图提示</strong>箭头上同时记录了动作和奖励，状态则是智能体在每一步看到的环境信息。</div>
+        </section>
+
+        <section class="section" id="return" aria-labelledby="return-title">
+          <div class="section-kicker">02 · Measure the outcome</div>
+          <h2 id="return-title">累计回报：一次经历得到多少</h2>
+          <p>从时刻 <i>t</i> 开始，把当前奖励和未来奖励按折扣因子累加，得到累计回报：</p>
+          <div class="equation">
+            <math display="block" aria-label="G_t 等于 r_t 加上折扣后的未来奖励">
+              <msub><mi>G</mi><mi>t</mi></msub><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>r</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><msup><mi>γ</mi><mn>2</mn></msup><msub><mi>r</mi><mrow><mi>t</mi><mo>+</mo><mn>2</mn></mrow></msub><mo>+</mo><mo>⋯</mo>
+            </math>
+          </div>
+          <p>其中 γ 是折扣因子。直接用采样得到的回报更新策略时，策略梯度可以写成：</p>
+          <div class="equation">
+            <math display="block" aria-label="策略梯度的采样估计">
+              <msub><mo>∇</mo><mi>θ</mi></msub><mi>J</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><msub><mi mathvariant="normal">E</mi><mrow><mi>τ</mi><mo>∼</mo><msub><mi>π</mi><mi>θ</mi></msub></mrow></msub><mrow><mo>[</mo><munderover><mo>∑</mo><mi>t</mi><mo></mo></munderover><msub><mo>∇</mo><mi>θ</mi></msub><mi>log</mi><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><msub><mi>G</mi><mi>t</mi></msub><mo>]</mo></mrow>
+            </math>
+          </div>
+          <p>这个公式理论上是正确的，但 <i>G</i><sub>t</sub> 的波动通常较大，因为它会同时受到状态、后续动作、环境随机性和未来奖励变化的影响。</p>
+          <div class="callout"><strong>关键问题</strong>同一个动作在两个不同状态下可能得到完全不同的回报。因此，绝对回报不能直接代表动作相对当前状态的好坏。</div>
+        </section>
+
+        <section class="section" id="baseline" aria-labelledby="baseline-title">
+          <div class="section-kicker">03 · Add a baseline</div>
+          <h2 id="baseline-title">用状态价值给动作设一个基准</h2>
+          <p>状态价值表示：在状态 <i>s</i> 下继续按照策略行动，平均能得到多少回报。</p>
+          <div class="equation">
+            <math display="block" aria-label="状态价值函数">
+              <msup><mi>V</mi><mi>π</mi></msup><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><msub><mi mathvariant="normal">E</mi><mrow><mi>a</mi><mo>∼</mo><mi>π</mi><mo>(</mo><mo>·</mo><mo>|</mo><mi>s</mi><mo>)</mo></mrow></msub><mrow><mo>[</mo><msup><mi>Q</mi><mi>π</mi></msup><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo><mo>]</mo></mrow>
+            </math>
+          </div>
+          <p>动作价值则进一步指定了第一步动作。优势函数比较这个动作和状态平均水平的差异：</p>
+          <div class="equation">
+            <math display="block" aria-label="优势函数等于动作价值减去状态价值">
+              <msup><mi>A</mi><mi>π</mi></msup><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo><mo>=</mo><msup><mi>Q</mi><mi>π</mi></msup><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo><mo>−</mo><msup><mi>V</mi><mi>π</mi></msup><mo>(</mo><mi>s</mi><mo>)</mo>
+            </math>
+          </div>
+          <p>在采样轨迹中，<i>G</i><sub>t</sub> 是动作价值的一次采样，因此可以使用下面的差值估计 Advantage：</p>
+          <div class="equation">
+            <math display="block" aria-label="优势估计">
+              <msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>=</mo><msub><mi>G</mi><mi>t</mi></msub><mo>−</mo><msub><mi>V</mi><mi>ϕ</mi></msub><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo>
+            </math>
+          </div>
+          <div class="example-grid">
+            <div class="example">
+              <div class="example-label">Example 01</div>
+              <div class="equation"><math display="block"><msub><mi>G</mi><mn>0</mn></msub><mo>=</mo><mn>100</mn><mo>,</mo><mspace width="1em"></mspace><msub><mi>V</mi><mi>ϕ</mi></msub><mo>(</mo><msub><mi>s</mi><mn>0</mn></msub><mo>)</mo><mo>=</mo><mn>90</mn></math></div>
+              <div class="equation"><math display="block"><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mn>0</mn></msub><mo>=</mo><mn>100</mn><mo>−</mo><mn>90</mn><mo>=</mo><mn>10</mn></math></div>
+              <p>动作比状态平均水平好 10。</p>
+            </div>
+            <div class="example">
+              <div class="example-label">Example 02</div>
+              <div class="equation"><math display="block"><msub><mi>G</mi><mo>′</mo><mn>0</mn></msub><mo>=</mo><mn>10</mn><mo>,</mo><mspace width="1em"></mspace><msub><mi>V</mi><mi>ϕ</mi></msub><mo>(</mo><msub><mi>s</mi><mo>′</mo><mn>0</mn></msub><mo>)</mo><mo>=</mo><mn>8</mn></math></div>
+              <div class="equation"><math display="block"><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mo>′</mo><mn>0</mn></msub><mo>=</mo><mn>10</mn><mo>−</mo><mn>8</mn><mo>=</mo><mn>2</mn></math></div>
+              <p>动作只比状态平均水平好 2。</p>
+            </div>
+          </div>
+          <p>所以，回报描述动作之后得到的绝对结果，而优势描述动作相对于当前状态平均水平的表现。</p>
+        </section>
+
+        <section class="section" id="td" aria-labelledby="td-title">
+          <div class="section-kicker">04 · Bootstrap one step</div>
+          <h2 id="td-title">TD：用一步预测替代完整回报</h2>
+          <p>Monte Carlo 要等到回合结束才能得到完整的 <i>G</i><sub>t</sub>。TD 方法只看当前奖励，再用 Critic 估计尚未发生的部分。</p>
+          <p>设 d<sub>t</sub> 表示当前转移是否终止。终止时它为 1，否则为 0。</p>
+          <div class="equation">
+            <math display="block" aria-label="TD 零步目标">
+              <msub><mover><mi>G</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>d</mi><mi>t</mi></msub><mo>)</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo>
+            </math>
+          </div>
+          <p>对应的 TD 误差为：</p>
+          <div class="equation">
+            <math display="block" aria-label="TD 误差">
+              <msub><mi>δ</mi><mi>t</mi></msub><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>d</mi><mi>t</mi></msub><mo>)</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo><mo>−</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo>
+            </math>
+          </div>
+          <div class="callout"><strong>直觉</strong>δ<sub>t</sub> 表示这一步实际得到的结果，比 Critic 原先对当前状态的预测多了多少或少了多少。</div>
+        </section>
+
+        <section class="section" id="gae-map" aria-labelledby="gae-map-title">
+          <div class="section-kicker">05 · Choose the estimator</div>
+          <h2 id="gae-map-title">G、TD、n-step 和 GAE 的关系</h2>
+          <p>它们使用的更新信号不同。关键问题是：完整回报 <i>G</i><sub>t</sub> 并不是所有 Advantage 估计都会直接使用。</p>
+          <table class="method-table">
+            <thead><tr><th>方法</th><th>主要更新信号</th><th>直接使用完整 G<sub>t</sub>？</th><th>特点</th></tr></thead>
+            <tbody>
+              <tr><td>REINFORCE / Monte Carlo</td><td>完整回报</td><td>是</td><td>方差大，但不依赖 Critic 自举</td></tr>
+              <tr><td>TD(0)</td><td>δ<sub>t</sub></td><td>否</td><td>一步更新，方差较小但依赖 Critic</td></tr>
+              <tr><td>n-step return</td><td>有限步奖励 + 末端价值</td><td>否</td><td>在真实奖励和长期预测之间折中</td></tr>
+              <tr><td>GAE</td><td>多个 TD 误差的加权和</td><td>否</td><td>用 λ 控制不同观察长度的混合</td></tr>
+            </tbody>
+          </table>
+          <p><strong>结论：</strong>GAE 的实现通常只需要奖励、价值预测、终止标记、γ 和 λ，然后反向递推 δ<sub>t</sub>。不过，GAE 仍然可以等价理解为多个 n-step Advantage 的加权组合，所以完整回报的思想仍然存在于它的推导关系中。</p>
+        </section>
+
+        <section class="section" id="nstep" aria-labelledby="nstep-title">
+          <div class="section-kicker">06 · Expand the horizon</div>
+          <h2 id="nstep-title">n-step Advantage：逐步扩大观察范围</h2>
+          <p>由连续的 TD 误差构造 n-step Advantage：</p>
+          <div class="equation">
+            <math display="block" aria-label="n 步优势估计">
+              <msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mi>n</mi><mo>)</mo></mrow></msubsup><mo>=</mo><munderover><mo>∑</mo><mrow><mi>l</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></munderover><msup><mi>γ</mi><mi>l</mi></msup><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mi>l</mi></mrow></msub>
+            </math>
+          </div>
+          <div class="derivation-grid">
+            <div class="derivation-card"><h3>一步</h3><div class="equation"><math display="block"><msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mn>1</mn><mo>)</mo></mrow></msubsup><mo>=</mo><msub><mi>δ</mi><mi>t</mi></msub></math></div></div>
+            <div class="derivation-card"><h3>两步</h3><div class="equation"><math display="block"><msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msubsup><mo>=</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub></math></div></div>
+            <div class="derivation-card"><h3>三步</h3><div class="equation"><math display="block"><msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mn>3</mn><mo>)</mo></mrow></msubsup><mo>=</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><msup><mi>γ</mi><mn>2</mn></msup><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>2</mn></mrow></msub></math></div></div>
+          </div>
+          <p>观察范围越长，使用的未来信息越多，也越接近真实未来奖励；同时估计方差通常会上升。</p>
+        </section>
+
+        <section class="section" id="cancellation" aria-labelledby="cancellation-title">
+          <div class="section-kicker">07 · Follow the gamma</div>
+          <h2 id="cancellation-title">为什么两处 gamma 会巧妙抵消？</h2>
+          <p>先看两步 Advantage。注意：第二个 TD 误差必须整体乘上一个外部 γ。</p>
+          <div class="equation"><math display="block" aria-label="两步 TD 误差之和"><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub></math></div>
+          <p>把两个 TD 误差展开：</p>
+          <div class="equation"><math display="block" aria-label="展开两步 TD 误差"><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mo>[</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo><mo>−</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><mo>]</mo><mo>+</mo><mi>γ</mi><mo>[</mo><msub><mi>r</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>γ</mi><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>2</mn></mrow></msub><mo>)</mo><mo>−</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo><mo>]</mo></math></div>
+          <p>继续展开后，中间价值项正好抵消：</p>
+          <div class="equation"><math display="block" aria-label="两步回报形式"><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>r</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><msup><mi>γ</mi><mn>2</mn></msup><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>2</mn></mrow></msub><mo>)</mo><mo>−</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo></math></div>
+          <div class="derivation-grid">
+            <div class="derivation-card"><h3>δ<sub>t</sub> 内部的 γ</h3><p>把下一状态的价值折回到当前时刻。</p></div>
+            <div class="derivation-card"><h3>外部的 γ</h3><p>把未来一步的 TD 误差折回到当前时刻。</p></div>
+          </div>
+          <p>如果错误地写成不带外部 γ 的形式：</p>
+          <div class="equation"><math display="block" aria-label="没有外部 gamma 的错误展开"><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><msub><mi>r</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><mo>(</mo><mi>γ</mi><mo>−</mo><mn>1</mn><mo>)</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo><mo>+</mo><mi>γ</mi><mi>V</mi><mo>(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>2</mn></mrow></msub><mo>)</mo><mo>−</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo></math></div>
+          <div class="callout"><strong>结论</strong>外部 γ 不是重复折扣，而是在处理未来 TD 误差与当前时刻之间的时间距离。</div>
+        </section>
+
+        <section class="section" id="gae" aria-labelledby="gae-title">
+          <div class="section-kicker">08 · Geometric weighting</div>
+          <h2 id="gae-title">GAE：指数衰减地混合 TD 误差</h2>
+          <p>GAE 将不同长度的 n-step Advantage 做几何加权：</p>
+          <div class="equation"><math display="block" aria-label="GAE 的 n 步加权形式"><msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mi>GAE</mi><mo>)</mo></mrow></msubsup><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>λ</mi><mo>)</mo><munderover><mo>∑</mo><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><mi>∞</mi></munderover><msup><mi>λ</mi><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msup><msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mi>n</mi><mo>)</mo></mrow></msubsup></math></div>
+          <p>第 n 个估计的权重为：</p>
+          <div class="equation"><math display="block" aria-label="几何权重"><msub><mi>w</mi><mi>n</mi></msub><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>λ</mi><mo>)</mo><msup><mi>λ</mi><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msup></math></div>
+          <p>因为：</p>
+          <div class="equation"><math display="block" aria-label="权重和为 1"><munderover><mo>∑</mo><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><mi>∞</mi></munderover><msub><mi>w</mi><mi>n</mi></msub><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>λ</mi><mo>)</mo><mo>(</mo><mn>1</mn><mo>+</mo><mi>λ</mi><mo>+</mo><msup><mi>λ</mi><mn>2</mn></msup><mo>+</mo><mo>⋯</mo><mo>)</mo><mo>=</mo><mn>1</mn></math></div>
+          <p>把 n-step Advantage 展开并交换求和顺序后，得到：</p>
+          <div class="equation"><math display="block" aria-label="GAE 的 TD 误差形式"><msubsup><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi><mrow><mo>(</mo><mi>GAE</mi><mo>)</mo></mrow></msubsup><mo>=</mo><munderover><mo>∑</mo><mrow><mi>l</mi><mo>=</mo><mn>0</mn></mrow><mi>∞</mi></munderover><msup><mrow><mo>(</mo><mi>γ</mi><mi>λ</mi><mo>)</mo></mrow><mi>l</mi></msup><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mi>l</mi></mrow></msub></math></div>
+          <p>实际实现时通常从轨迹末端反向递推：</p>
+          <div class="equation"><math display="block" aria-label="GAE 反向递推式"><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>=</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><mi>λ</mi><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>d</mi><mi>t</mi></msub><mo>)</mo><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub></math></div>
+          <p>终止标记会切断跨越回合边界的未来信息。</p>
+          <div class="weight-figure">
+            <figcaption>静态示意：取 γ = 0.9、λ = 0.5 时，GAE 如何把每个 TD 误差按指数衰减后相加。</figcaption>
+            <svg viewBox="0 0 700 235" role="img" aria-label="GAE 指数衰减求和项示意图">
+              <line class="axis" x1="24" y1="196" x2="420" y2="196"></line>
+              <text class="muted-label" x="24" y="218">当前时刻</text>
+              <text class="muted-label" x="348" y="218">未来</text>
+              <text x="24" y="26" font-weight="700">求和项</text>
+              <rect class="bar-main" x="24" y="48" width="290" height="24" rx="8"></rect>
+              <rect class="bar-fade" x="24" y="88" width="145" height="24" rx="8"></rect>
+              <rect class="bar-fade" x="24" y="128" width="72" height="24" rx="8"></rect>
+              <rect class="bar-fade" x="24" y="168" width="36" height="24" rx="8"></rect>
+              <text x="328" y="65">δ<tspan baseline-shift="sub" font-size="9">t</tspan></text>
+              <text x="184" y="105">γλδ<tspan baseline-shift="sub" font-size="9">t+1</tspan></text>
+              <text x="110" y="145">(γλ)²δ<tspan baseline-shift="sub" font-size="9">t+2</tspan></text>
+              <text x="74" y="185">(γλ)³δ<tspan baseline-shift="sub" font-size="9">t+3</tspan></text>
+              <rect class="sum-box" x="470" y="50" width="198" height="116" rx="16"></rect>
+              <text x="491" y="80" font-weight="700">最终求和</text>
+              <text x="491" y="110">Â<tspan baseline-shift="sub" font-size="9">t</tspan> = δ<tspan baseline-shift="sub" font-size="9">t</tspan></text>
+              <text x="491" y="135">+ γλδ<tspan baseline-shift="sub" font-size="9">t+1</tspan> + …</text>
+              <text class="muted-label" x="491" y="155">远期项逐渐变轻</text>
+            </svg>
+            <div class="lambda-strip">
+              <div class="lambda-item"><strong>λ = 0</strong><span>只保留 δ<sub>t</sub>，等价于一步 TD。</span></div>
+              <div class="lambda-item"><strong>λ = 0.5</strong><span>近处权重大，远期信息快速衰减。</span></div>
+              <div class="lambda-item"><strong>λ = 0.95</strong><span>远期项仍有影响，更接近 Monte Carlo。</span></div>
+            </div>
+          </div>
+          <p>从概率角度看，w<sub>n</sub> 构成一个几何分布，可以理解为随机决定观察未来多少步，再对这个随机长度下的估计取期望。</p>
+          <div class="equation"><math display="block" aria-label="几何分布的期望观察长度"><mi mathvariant="normal">E</mi><mo>[</mo><mi>N</mi><mo>]</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>−</mo><mi>λ</mi></mrow></mfrac></math></div>
+          <p>所以 λ = 0.5 时平均观察约 2 步，λ = 0.95 时平均观察约 20 步。</p>
+        </section>
+
+        <section class="section" id="actor" aria-labelledby="actor-title">
+          <div class="section-kicker">09 · Improve the policy</div>
+          <h2 id="actor-title">Actor：让好动作更常出现</h2>
+          <p>Actor 根据优势估计调整动作概率。优势为正时，增加动作 <i>a</i><sub>t</sub> 的概率；优势为负时，降低动作 <i>a</i><sub>t</sub> 的概率。</p>
+          <div class="equation">
+            <math display="block" aria-label="Actor 损失函数">
+              <msub><mi>L</mi><mtext>actor</mtext></msub><mo>=</mo><mo>−</mo><msub><mi mathvariant="normal">E</mi><mi>t</mi></msub><mrow><mo>[</mo><mi>log</mi><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>]</mo></mrow>
+            </math>
+          </div>
+          <div class="callout"><strong>为什么更稳定？</strong>减去状态价值后，Actor 看到的是动作的相对表现，状态本身带来的整体波动会被削弱。</div>
+        </section>
+
+        <section class="section" id="critic" aria-labelledby="critic-title">
+          <div class="section-kicker">10 · Learn the baseline</div>
+          <h2 id="critic-title">Critic：学习状态价值</h2>
+          <p>Critic 通过拟合采样回报，学习估计状态价值。它的预测会成为 Actor 的基准。</p>
+          <div class="equation">
+            <math display="block" aria-label="Critic 损失函数">
+              <msub><mi>L</mi><mtext>critic</mtext></msub><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><msub><mi mathvariant="normal">E</mi><mi>t</mi></msub><mrow><mo>[</mo><msup><mrow><mo>(</mo><msub><mi>V</mi><mi>ϕ</mi></msub><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><mo>−</mo><msub><mi>G</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>]</mo></mrow>
+            </math>
+          </div>
+          <p>Critic 预测得越接近采样回报，优势估计就越能反映动作相对于状态平均水平的真实差异。</p>
+        </section>
+
+        <section class="section" id="joint" aria-labelledby="joint-title">
+          <div class="section-kicker">11 · Close the loop</div>
+          <h2 id="joint-title">Actor-Critic：把两条学习路径合在一起</h2>
+          <p>Actor 负责调整策略，Critic 负责估计状态价值。最终可以把两个损失联合起来优化：</p>
+          <div class="equation">
+            <math display="block" aria-label="Actor-Critic 联合损失">
+              <mi>L</mi><mo>=</mo><msub><mi>L</mi><mtext>actor</mtext></msub><mo>+</mo><msub><mi>c</mi><mi>V</mi></msub><msub><mi>L</mi><mtext>critic</mtext></msub>
+            </math>
+          </div>
+          <p>其中 c<sub>V</sub> 用于调节 Critic 损失的权重。整个更新循环可以概括为：采样轨迹，计算回报，用 Critic 估计基准，再用 Advantage 更新 Actor。</p>
+          <div class="summary-card">
+            <h2>一句话记忆</h2>
+            <p>回报告诉你“结果是多少”，价值告诉你“这个状态通常是多少”，优势告诉你“这次动作比平均水平好多少”。</p>
+          </div>
+        </section>
+
+        <section class="section" id="ppo-problem" aria-labelledby="ppo-problem-title">
+          <div class="section-kicker">12 · Why PPO</div>
+          <h2 id="ppo-problem-title">为什么普通策略梯度需要限制更新？</h2>
+          <p>Actor-Critic 已经可以用 GAE 得到 Advantage，并据此更新策略。但一批轨迹来自采样时的旧策略，而我们可能会用这批数据做多轮梯度更新。</p>
+          <ul class="clean-list">
+            <li>采样数据来自旧策略，但当前策略可能已经偏离旧策略很多。</li>
+            <li>同一批数据被重复使用时，更新信号可能被过度放大。</li>
+            <li>Advantage 的方向本来合理，但动作概率变化太快会让训练不稳定。</li>
+          </ul>
+          <div class="callout"><strong>PPO 的核心想法</strong>允许策略学习，但限制它相对旧策略的变化幅度。</div>
+        </section>
+
+        <section class="section" id="ratio" aria-labelledby="ratio-title">
+          <div class="section-kicker">13 · Compare policies</div>
+          <h2 id="ratio-title">新旧策略与概率比</h2>
+          <p>采样时使用旧策略 π<sub>θ,old</sub>，更新时使用当前策略 π<sub>θ</sub>。对同一个已经执行的动作，定义概率比：</p>
+          <div class="equation"><math display="block" aria-label="新旧策略概率比"><msub><mi>r</mi><mi>t</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfrac><mrow><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo></mrow><mrow><msub><mi>π</mi><mrow><mi>θ</mi><mo>old</mo></mrow></msub><mo>(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo></mrow></mfrac></math></div>
+          <p>这个比值表示当前策略给该动作的概率，相对于采样策略提高或降低了多少。</p>
+          <ul class="clean-list">
+            <li>概率比等于 1：新旧策略对该动作的概率相同。</li>
+            <li>概率比大于 1：新策略更偏向该动作。</li>
+            <li>概率比小于 1：新策略降低该动作的概率。</li>
+          </ul>
+          <div class="callout"><strong>实现提示</strong>旧策略概率需要在采样时保存；更新阶段只重新计算当前策略对已执行动作的概率。</div>
+        </section>
+
+        <section class="section" id="clip" aria-labelledby="clip-title">
+          <div class="section-kicker">14 · Limit the step</div>
+          <h2 id="clip-title">PPO Clipping 目标</h2>
+          <p>如果只使用概率比，未裁剪的策略目标为：</p>
+          <div class="equation"><math display="block" aria-label="未裁剪策略目标"><msup><mi>L</mi><mi>PG</mi></msup><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><msub><mi mathvariant="normal">E</mi><mi>t</mi></msub><mrow><mo>[</mo><msub><mi>r</mi><mi>t</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>]</mo></mrow></math></div>
+          <p>当 Advantage 为正时，增大概率比会提高目标；当 Advantage 为负时，减小概率比会提高目标。PPO 对概率比进行裁剪：</p>
+          <div class="equation"><math display="block" aria-label="PPO 裁剪目标"><msup><mi>L</mi><mi>CLIP</mi></msup><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><msub><mi mathvariant="normal">E</mi><mi>t</mi></msub><mrow><mo>[</mo><mi>min</mi><mo>(</mo><msub><mi>r</mi><mi>t</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>,</mo><mi>clip</mi><mo>(</mo><msub><mi>r</mi><mi>t</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><mo>,</mo><mn>1</mn><mo>−</mo><mi>ε</mi><mo>,</mo><mn>1</mn><mo>+</mo><mi>ε</mi><mo>)</mo><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>)</mo><mo>]</mo></mrow></math></div>
+          <p>ε 控制允许的变化范围。默认示例使用 ε = 0.2，也就是把主要更新范围限制在 0.8 到 1.2 附近。</p>
+          <figure class="ratio-figure">
+            <figcaption>概率比示意：裁剪后的目标在允许区间外停止继续奖励策略远离旧策略。</figcaption>
+            <svg viewBox="0 0 700 270" role="img" aria-label="PPO 概率比裁剪示意图">
+              <rect class="clip-zone" x="246" y="27" width="208" height="190" rx="10"></rect>
+              <line class="grid-line" x1="58" y1="217" x2="660" y2="217"></line>
+              <line class="grid-line" x1="58" y1="27" x2="58" y2="217"></line>
+              <line class="grid-line" x1="246" y1="27" x2="246" y2="217"></line>
+              <line class="grid-line" x1="454" y1="27" x2="454" y2="217"></line>
+              <path class="positive-line" d="M58 196 L246 136 L454 68 L660 68"></path>
+              <path class="negative-line" d="M58 68 L246 68 L454 136 L660 196"></path>
+              <text class="muted-label" x="246" y="237" text-anchor="middle">1 − ε = 0.8</text>
+              <text class="muted-label" x="454" y="237" text-anchor="middle">1 + ε = 1.2</text>
+              <text class="muted-label" x="360" y="18" text-anchor="middle">允许更新区间</text>
+              <text x="64" y="49">正 Advantage</text>
+              <text x="64" y="91">负 Advantage</text>
+              <text class="muted-label" x="505" y="61">正项停止上升</text>
+              <text class="muted-label" x="69" y="186">负项停止下降</text>
+              <text class="muted-label" x="355" y="262" text-anchor="middle">概率比 r<tspan baseline-shift="sub" font-size="9">t</tspan>(θ)</text>
+            </svg>
+          </figure>
+        </section>
+
+        <section class="section" id="ppo-sign" aria-labelledby="ppo-sign-title">
+          <div class="section-kicker">15 · Read the min</div>
+          <h2 id="ppo-sign-title">Advantage 正负决定裁剪方向</h2>
+          <div class="ppo-grid">
+            <div class="ppo-card positive">
+              <h3>Advantage 为正</h3>
+              <p>提高该动作概率通常有利，但当概率比超过 1 + ε 后，PPO 不再继续奖励概率增加，防止好动作被过度强化。</p>
+            </div>
+            <div class="ppo-card negative">
+              <h3>Advantage 为负</h3>
+              <p>降低该动作概率通常有利，但当概率比低于 1 − ε 后，PPO 不再继续扩大惩罚，防止坏动作被过度压低。</p>
+            </div>
+          </div>
+          <div class="callout"><strong>min 的作用</strong>它选择更保守的目标值，保留有用更新，同时限制当前策略离开旧策略太远。</div>
+        </section>
+
+        <section class="section" id="ppo-loss" aria-labelledby="ppo-loss-title">
+          <div class="section-kicker">16 · Complete objective</div>
+          <h2 id="ppo-loss-title">PPO 的 Critic、Entropy 与联合损失</h2>
+          <p>Critic 使用价值目标训练：</p>
+          <div class="equation"><math display="block" aria-label="PPO 价值损失"><msub><mi>L</mi><mi>value</mi></msub><mo>=</mo><msub><mi mathvariant="normal">E</mi><mi>t</mi></msub><mrow><mo>[</mo><msup><mrow><mo>(</mo><mi>V</mi><mo>(</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><mo>−</mo><msub><mover><mi>R</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>]</mo></mrow></math></div>
+          <p>熵正则鼓励策略保留一定探索性：</p>
+          <div class="equation"><math display="block" aria-label="策略熵"><mi>H</mi><mo>(</mo><msub><mi>π</mi><mi>θ</mi></msub><mo>)</mo><mo>=</mo><msub><mi mathvariant="normal">E</mi><mi>t</mi></msub><mrow><mo>[</mo><mo>−</mo><mi>log</mi><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><mo>]</mo></mrow></math></div>
+          <p>采用最小化形式时，PPO 联合损失为：</p>
+          <div class="equation"><math display="block" aria-label="PPO 联合损失"><msub><mi>L</mi><mi>PPO</mi></msub><mo>=</mo><mo>−</mo><msup><mi>L</mi><mi>CLIP</mi></msup><mo>+</mo><msub><mi>c</mi><mi>V</mi></msub><msub><mi>L</mi><mi>value</mi></msub><mo>−</mo><msub><mi>c</mi><mi>H</mi></msub><mi>H</mi><mo>(</mo><msub><mi>π</mi><mi>θ</mi></msub><mo>)</mo></math></div>
+          <ul class="clean-list">
+            <li>第一项更新 Actor。</li>
+            <li>第二项训练 Critic。</li>
+            <li>第三项鼓励策略保留探索性。</li>
+            <li>c<sub>V</sub> 和 c<sub>H</sub> 控制对应权重。</li>
+          </ul>
+          <div class="callout"><strong>符号提示</strong>策略目标是最大化，而代码中的总损失通常采用最小化，所以需要使用 −L<sup>CLIP</sup>。</div>
+        </section>
+
+        <section class="section" id="ppo-reuse" aria-labelledby="ppo-reuse-title">
+          <div class="section-kicker">16a · Reuse fresh data</div>
+          <h2 id="ppo-reuse-title">为什么一次采样会进行多次梯度更新？</h2>
+          <p>环境交互通常比在已有数据上做一次前向和反向传播更昂贵。因此 PPO 会先收集一批由旧策略产生的 on-policy 数据，再把它切成多个 minibatch，重复训练若干个 epoch。</p>
+          <div class="ppo-flow" aria-label="一次采样批次的多次更新流程">
+            <div class="ppo-flow-step"><small>01</small><strong>采样一批数据</strong><span>保存旧策略 log probability</span></div>
+            <div class="ppo-flow-step"><small>02</small><strong>计算 Advantage</strong><span>GAE 和价值目标只需算好一次</span></div>
+            <div class="ppo-flow-step"><small>03</small><strong>切成 minibatch</strong><span>打乱后分批送入网络</span></div>
+            <div class="ppo-flow-step"><small>04</small><strong>重复多个 epoch</strong><span>同一批数据贡献多次更新</span></div>
+            <div class="ppo-flow-step"><small>05</small><strong>丢弃并重采样</strong><span>用新策略获得新数据</span></div>
+          </div>
+          <ul class="clean-list">
+            <li>提高样本利用率：一次环境交互可以贡献多次参数更新。</li>
+            <li>降低梯度噪声：一个 batch 中的多个样本共同决定更新方向。</li>
+            <li>平衡训练成本：减少环境交互次数，同时充分利用神经网络计算。</li>
+          </ul>
+          <div class="callout"><strong>为什么不能无限重复？</strong>这些数据来自旧策略。当前策略变化后，数据会逐渐变旧；概率比和 clipping 可以限制偏离，但不能让旧数据永远有效。经过若干 epoch 后，应当丢弃当前批次并重新采样。</div>
+        </section>
+
+        <section class="section" id="entropy" aria-labelledby="entropy-title">
+          <div class="section-kicker">16b · Keep exploring</div>
+          <h2 id="entropy-title">熵正则：让策略不要过早变得确定</h2>
+          <p>如果只追求提高 Advantage，策略可能很快把概率集中到少数动作。一旦过早确定，其他动作就很难再被探索，策略可能陷入局部最优。</p>
+          <p>离散动作下，策略熵定义为：</p>
+          <div class="equation"><math display="block" aria-label="离散策略熵"><mi>H</mi><mo>(</mo><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><mo>·</mo><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><mo>)</mo><mo>=</mo><mo>−</mo><munderover><mo>∑</mo><mi>a</mi><mo></mo></munderover><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><mi>a</mi><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo><mi>log</mi><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><mi>a</mi><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo></math></div>
+          <p>实际训练中也常用采样估计：</p>
+          <div class="equation"><math display="block" aria-label="熵的采样估计"><msub><mover><mi>H</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>=</mo><mo>−</mo><mi>log</mi><msub><mi>π</mi><mi>θ</mi></msub><mo>(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>|</mo><msub><mi>s</mi><mi>t</mi></msub><mo>)</mo></math></div>
+          <div class="ppo-grid">
+            <div class="ppo-card positive"><h3>熵较大</h3><p>动作分布更分散，探索性更强，策略还愿意尝试其他动作。</p></div>
+            <div class="ppo-card negative"><h3>熵较小</h3><p>动作分布更集中，策略更确定，但也更容易过早放弃潜在的好动作。</p></div>
+          </div>
+          <p>由于训练代码通常最小化损失，联合目标中使用负的熵项：</p>
+          <div class="equation"><math display="block" aria-label="包含熵正则的 PPO 损失"><msub><mi>L</mi><mi>PPO</mi></msub><mo>=</mo><mo>−</mo><msup><mi>L</mi><mi>CLIP</mi></msup><mo>+</mo><msub><mi>c</mi><mi>V</mi></msub><msub><mi>L</mi><mi>value</mi></msub><mo>−</mo><msub><mi>c</mi><mi>H</mi></msub><mi>H</mi><mo>(</mo><msub><mi>π</mi><mi>θ</mi></msub><mo>)</mo></math></div>
+          <p>负号意味着最小化总损失时会倾向于增大熵。c<sub>H</sub> 太小，策略可能过早收敛；c<sub>H</sub> 太大，策略会长期保持随机，难以形成稳定行为。因此熵正则通常是逐渐减弱的探索奖励，而不是让策略永远保持高随机性。</p>
+        </section>
+
+        <section class="section" id="ppo-loop" aria-labelledby="ppo-loop-title">
+          <div class="section-kicker">17 · One PPO update</div>
+          <h2 id="ppo-loop-title">PPO 一次完整更新流程</h2>
+          <div class="ppo-flow" aria-label="PPO 更新流程">
+            <div class="ppo-flow-step"><small>01</small><strong>采样轨迹</strong><span>保存旧策略 log probability</span></div>
+            <div class="ppo-flow-step"><small>02</small><strong>计算 GAE</strong><span>由 TD 误差得到 Advantage</span></div>
+            <div class="ppo-flow-step"><small>03</small><strong>切分 minibatch</strong><span>同一批 on-policy 数据多轮使用</span></div>
+            <div class="ppo-flow-step"><small>04</small><strong>计算 ratio</strong><span>重新计算当前策略概率</span></div>
+            <div class="ppo-flow-step"><small>05</small><strong>Clip 更新</strong><span>更新 Actor、Critic 和熵</span></div>
+          </div>
+          <ol class="clean-list">
+            <li>使用当前策略采样一批轨迹。</li>
+            <li>保存动作、奖励、终止标记和旧策略 log probability。</li>
+            <li>用 Critic 计算 TD 误差，再用 GAE 计算 Advantage。</li>
+            <li>构造 λ-return 价值目标，训练 Critic。</li>
+            <li>将轨迹切成多个 minibatch，多轮更新 Actor 和 Critic。</li>
+            <li>每轮重新计算当前策略 log probability，得到概率比并应用 clipping。</li>
+            <li>完成更新后丢弃这批 on-policy 数据，用新策略重新采样。</li>
+          </ol>
+          <div class="callout"><strong>数据新鲜度</strong>PPO 可以对一批新采样数据重复使用若干轮，但不能把很旧的数据无限重复使用，否则新旧策略差距会越来越大。</div>
+        </section>
+
+        <section class="section" id="ppo-map" aria-labelledby="ppo-map-title">
+          <div class="section-kicker">18 · Connect the pieces</div>
+          <h2 id="ppo-map-title">PPO 与 Actor-Critic、GAE 的关系</h2>
+          <div class="flow" aria-label="从回报到 PPO 的学习路径">
+            <div class="flow-step"><small>01</small><strong>回报 G</strong></div>
+            <div class="flow-step"><small>02</small><strong>TD 误差 δ</strong></div>
+            <div class="flow-step"><small>03</small><strong>GAE Advantage</strong></div>
+            <div class="flow-step"><small>04</small><strong>Actor-Critic</strong></div>
+            <div class="flow-step"><small>05</small><strong>PPO Clipping</strong></div>
+          </div>
+          <ul class="clean-list">
+            <li>GAE 负责构造更稳定的 Advantage。</li>
+            <li>Critic 负责估计状态价值和价值目标。</li>
+            <li>Actor 根据 Advantage 调整策略概率。</li>
+            <li>PPO clipping 负责限制新旧策略的变化幅度。</li>
+          </ul>
+          <div class="equation"><math display="block" aria-label="从回报到 PPO 的关系"><msub><mi>G</mi><mi>t</mi></msub><mo>→</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>→</mo><msub><mover><mi>A</mi><mo>ˆ</mo></mover><mi>t</mi></msub><msup><mrow><mo>(</mo><mi>GAE</mi><mo>)</mo></mrow><mo></mo></msup><mo>→</mo><mi>Actor</mi><mo>−</mo><mi>Critic</mi><mo>→</mo><msub><mi>r</mi><mi>t</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><mo>→</mo><msup><mi>L</mi><mi>CLIP</mi></msup></math></div>
+          <div class="summary-card"><h2>一句话记忆</h2><p>GAE 负责把多步信息变成稳定的 Advantage，PPO 再用新旧策略概率比的 clipping，防止 Actor 一次更新得太远。</p></div>
+        </section>
+
+        <footer class="article-footer">
+          <span>RL Learning Notes · Actor-Critic</span>
+          <a class="back-top" href="#top">回到顶部 ↑</a>
+        </footer>
+      </article>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const themeButton = document.querySelector('#theme-toggle');
+      const savedTheme = localStorage.getItem('rl-notes-theme');
+      if (savedTheme === 'dark') root.dataset.theme = 'dark';
+
+      themeButton.addEventListener('click', () => {
+        const dark = root.dataset.theme === 'dark';
+        if (dark) delete root.dataset.theme;
+        else root.dataset.theme = 'dark';
+        localStorage.setItem('rl-notes-theme', dark ? 'light' : 'dark');
+      });
+
+      const tocLinks = [...document.querySelectorAll('.toc a')];
+      const sections = tocLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+      const syncActiveLink = () => {
+        const line = window.scrollY + 150;
+        let current = sections[0];
+        sections.forEach(section => { if (section.offsetTop <= line) current = section; });
+        tocLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${current.id}`));
+      };
+
+      const syncProgress = () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const progress = max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0;
+        document.body.style.setProperty('--read-progress', `${progress}%`);
+      };
+
+      window.addEventListener('scroll', () => { syncActiveLink(); syncProgress(); }, { passive: true });
+      syncActiveLink();
+      syncProgress();
+    })();
+  </script>
+</body>
+</html>
