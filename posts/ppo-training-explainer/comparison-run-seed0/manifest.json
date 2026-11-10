@@ -1,0 +1,64 @@
+{
+  "started_utc": "2026-11-10T04:55:51.971409+00:00",
+  "original_model_sha256_before": "d0b34b01c5fb1e037b4d2c44e440b0d75544e5bdb8b844f49733c0341b06b533",
+  "source_sha256": "e9a0cc30a0b05d4bcef6d0dfef3e07854b987c3f6de6291bd4d450fca876f7ed",
+  "config": {
+    "policy": "MlpPolicy",
+    "n_steps": 1024,
+    "batch_size": 256,
+    "learning_rate": 0.0003,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "ent_coef": 0.0
+  },
+  "train_seed": 0,
+  "device": "cpu",
+  "torch_threads": 1,
+  "n_envs": 4,
+  "requested_steps": 300000,
+  "train_initial_angle_deg": [
+    -10,
+    10
+  ],
+  "train_angle_distribution": "uniform",
+  "test_angles_deg": [
+    10,
+    -10
+  ],
+  "test_seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "deterministic": true,
+  "env_id": "InvertedPendulum-v5",
+  "step_seconds": 0.04,
+  "max_episode_steps": 1000,
+  "versions": {
+    "stable-baselines3": "2.9.2",
+    "gymnasium": "1.4.0",
+    "mujoco": "3.17.0",
+    "torch": "2.15.0"
+  },
+  "before_policy_sha256": "a2ed776043ec548da3c597c8f0ab543d1f333f181d446cefdd1570e90caef53a",
+  "training_seconds": 14.89,
+  "actual_steps": 303104,
+  "n_epochs": 10,
+  "rollouts": 74,
+  "optimizer_steps": 11840,
+  "after_policy_sha256": "7e5c3648ccf955a855cf649c732014a106170534c67c1baa48571da23a928565",
+  "original_model_sha256_after": "d0b34b01c5fb1e037b4d2c44e440b0d75544e5bdb8b844f49733c0341b06b533",
+  "original_model_preserved": true,
+  "before_model_sha256": "c975b544c6259bbe19efc1aa06122664d60bbcf531773b0c7d9043c99bb9048e",
+  "after_model_sha256": "145bf52ae40a0d62ee3b63aa1cfba9f2abcd8f39ab86e451fbaed18626d6dd7c",
+  "evaluation_did_not_update_parameters": true,
+  "finished_utc": "2026-11-10T04:56:08.624729+00:00"
+}

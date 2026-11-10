@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="PPO 如何学会稳住倒立摆：先看懂一次 episode，再跟随采样、4096 条数据的十轮学习与策略更新，查看真实训练曲线和训练前后对比。">
+  <meta name="category" content="强化学习">
+  <title>PPO 如何学会稳住倒立摆</title>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="canonical" href="https://mystatic.github.io/posts/ppo-training-explainer/">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="PPO 如何学会稳住倒立摆">
+  <meta property="og:url" content="https://mystatic.github.io/posts/ppo-training-explainer/">
+  <meta property="article:section" content="强化学习">
+  <script defer src="boot.js"></script>
+</head>
+<body>
+<div class="site-shell">
+  <div class="publication-bar"><a href="../../index.html">← 返回阅读笔记</a><span>2026.11.10 · 强化学习 / 交互教程 · 约 30–45 分钟</span></div>
+  <header class="masthead">
+    <div><span class="eyebrow">强化学习 / 交互教程</span><h1>PPO 如何学会稳住倒立摆</h1><p class="intro">从一次尝试，到采样、反复训练与策略更新。</p></div>
+    <div class="provenance"><span class="live-dot"></span>真实运行记录<span>MuJoCo × Stable-Baselines3</span><small>流程记录 + 独立训练前后评估 · 离线可用</small></div>
+  </header>
+  <section class="story-opening" aria-label="这页在讲什么">
+    <p><strong>一台还不会控制小车的电脑，怎样从尝试中学到更好的动作？</strong> 它先观察摆杆，选择动作，让仿真器算出结果；收集一批这样的经历后，PPO 才调整策略，再带着新策略继续尝试。</p>
+    <div class="reading-goal"><span>读完能回答</span><b>一次尝试何时结束？</b><b>经历怎样变成训练数据？</b><b>同一批数据怎样学十遍？</b><b>训练后真的更稳了吗？</b></div>
+  </section>
+  <p id="load-state" role="status">正在载入真实训练记录…</p><noscript><p>请启用 JavaScript 以观看动画、公式和真实样本。</p></noscript>
+  <div class="lesson-layout" inert aria-busy="true">
+    <aside class="chapter-nav"><p class="eyebrow">顺着故事，走完训练闭环</p><nav id="chapters" aria-label="讲解章节"></nav><div class="nav-foot"><span>先看动画，再看细节</span><p>新概念在第一次出现时解释。<br>数据、公式和代码可按需展开。</p><a href="#evidence">查看真实记录与来源 ↗</a></div></aside>
+    <main>
+      <div id="story-status" class="story-status" aria-label="当前位于训练过程的哪一部分"></div>
+      <div class="section-heading"><div><span id="chapter-kicker" class="eyebrow"></span><h2 id="chapter-title"></h2></div><span id="evidence-tag" class="tag"></span></div>
+      <div class="transport" aria-label="动画播放控制">
+        <button id="play" class="primary" type="button">▶ 播放</button><button id="prev" type="button" aria-label="上一步">← 上一步</button><button id="next" type="button" aria-label="下一步">下一步 →</button><button id="restart" class="quiet" type="button">重播本章</button>
+        <label class="speed">速度 <select id="speed"><option value="0.1">0.1×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <span id="step-label" class="mono"></span>
+        <label class="seek-label" for="seek">本章进度</label><input id="seek" type="range" min="0" value="0" aria-label="本章进度">
+      </div>
+      <nav id="training-nav" class="training-nav" aria-label="第六章学习步骤" hidden></nav>
+      <div class="lesson-body">
+        <section class="stage" aria-label="训练流程动画">
+          <div class="stage-top"><span id="stage-caption"></span><span id="phase-badge" class="tag muted"></span></div>
+          <div id="scene"></div>
+          <div id="stage-note" class="stage-note" aria-live="polite"></div>
+        </section>
+        <aside class="explanation"><span class="eyebrow">这一刻发生了什么</span><h3 id="explain-title"></h3><div id="explain-body"></div><details id="math-details" class="math-details"><summary>展开这一刻的公式</summary><div id="equation" class="equation"></div></details><div id="takeaway" class="takeaway"></div></aside>
+      </div>
+      <div id="concept-strip" class="concept-strip" aria-live="polite"></div>
+      <div class="chapter-bottom"><span id="chapter-summary"></span><button id="next-chapter" type="button">下一章 →</button></div>
+      <details class="glossary extra-panel"><summary>概念速查 <span>step、episode、rollout、minibatch、epoch 有什么不同？</span></summary>
+        <div class="glossary-table"><table><thead><tr><th>概念</th><th>它在数什么？</th><th>本脚本中的含义</th></tr></thead><tbody>
+          <tr><td>环境步 step</td><td>一次动作与反馈</td><td>策略选一次动作，仿真推进 0.04 秒，返回一次观测和奖励。</td></tr>
+          <tr><td>回合 episode</td><td>一次完整尝试</td><td>从 reset 的初始状态，到任务终止或时间截断；包含很多 step，长度可变。</td></tr>
+          <tr><td>采样批次 rollout</td><td>为训练收集了多少经历</td><td>4 个环境各 1024 步，共 4096 条；可以跨过多个 episode，也可以截在回合中间。</td></tr>
+          <tr><td>训练小批 minibatch</td><td>一次梯度更新用多少数据</td><td>把 4096 条打乱后分成 16 份，每份 256 条，依次更新网络。</td></tr>
+          <tr><td>遍历轮次 epoch</td><td>这整批数据学完几遍</td><td>用完全部 16 份才算一遍；重新打乱后再来，共 10 遍，每条样本各用 10 次。</td></tr>
+        </tbody></table></div>
+      </details>
+      <details class="questions extra-panel" id="questions-details">
+        <summary>继续追问：观测、动作、价值与奖励 <span>九个随堂问答，结合当前样本展开</span></summary>
+        <div class="questions-heading"><div><span class="eyebrow">YOUR QUESTIONS, EXPLAINED</span><h3 id="questions-title">把刚才的问题，接回训练流程</h3><p>结合真实样本看解释。切换章节时自动定位相关问题，也可以点左侧逐项回看。</p></div><span class="tag real">随堂问答 · 9 个关键问题</span></div>
+        <div class="questions-layout"><nav id="question-nav" aria-label="随堂问答主题"></nav><article id="question-answer" aria-labelledby="question-title"></article></div>
+      </details>
+      <details class="sample-lab extra-panel" id="sample-details">
+        <summary>追踪任意一条真实样本 <span>查看它的来源、数值和十次训练记录</span></summary>
+        <div class="lab-heading"><div><span class="eyebrow">SAMPLE PASSPORT</span><h3 id="sample-title">选中一条样本，全程追踪它</h3></div><span class="tag real">真实数据</span></div>
+        <div class="sample-controls">
+          <label>数据批次<select id="rollout-select"><option value="0">Rollout 1 · 旧策略 π₀</option><option value="1">Rollout 2 · 旧策略 π₁</option></select></label>
+          <label>环境<select id="env-select"><option value="0">Env 1</option><option value="1">Env 2</option><option value="2">Env 3</option><option value="3">Env 4</option></select></label>
+          <label>采样时间步（从 0 开始）<input id="sample-time" type="number" min="0" max="1023" step="1" value="0"></label>
+          <button id="first-terminal" type="button">找一次真实终止</button><button id="last-sample" type="button">看最后一条样本</button>
+        </div>
+        <div id="passport"></div>
+        <details id="use-details"><summary>这条样本的 10 次训练记录 <span>点击某一轮，跳到它所在的 minibatch</span></summary><div id="use-history"></div></details>
+      </details>
+      <details class="code-panel extra-panel" id="code-details"><summary>对照这一刻的代码 <span>原脚本与 SB3 内部流程</span></summary><div class="code-top"><span class="eyebrow">FOLLOW THE CODE</span><span id="code-source"></span></div><pre id="code" aria-label="当前步骤对应代码"></pre><p id="code-note"></p></details>
+    </main>
+  </div>
+  <footer id="evidence">
+    <h2>把示意和事实分开</h2><div class="evidence-grid"><div><h3>真实执行，离线回放</h3><p>轨迹、奖励、reset、优势与每条样本的 10 次使用记录，来自两个完整 PPO rollout。SVG 用真实状态绘图；帧间插值与数据流箭头是教学示意，不是额外物理采样。前七章短程记录解释机制；第八章使用独立完整训练的配对测试，展示训练前后的真实行为。</p><p id="version-info"></p></div><div><h3>复现与边界</h3><p>复用原脚本的环境和训练参数；流程记录与独立训练均固定策略随机种子 0、使用 CPU；原模型保留。第八章另存训练前后两份模型，使用 ±10°、种子 1–10 的配对评估。时间截断案例单独把 TimeLimit 改为 2 步；原脚本为 1000 步。</p><a href="README.md">打开复现说明 ↗</a> · <a href="record_demo.py">查看记录脚本 ↗</a></div><div><h3>对应源码与文档</h3><p><a href="ppo_mujoco_minimal.py">ppo_mujoco_minimal.py ↗</a></p><p><a href="https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html">SB3 · PPO</a> · <a href="https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html">VecEnv / 自动 reset</a></p><p><a href="https://gymnasium.farama.org/environments/mujoco/inverted_pendulum/">Gymnasium · InvertedPendulum-v5</a></p><small>正文与动画无需联网；外部参考链接需联网。</small></div></div>
+  </footer>
+</div>
+<noscript>此交互讲解需要启用 JavaScript。所有脚本与数据均在本地，无需联网。</noscript>
+</body>
+</html>
