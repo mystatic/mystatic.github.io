@@ -57,3 +57,16 @@ a { color: inherit; }
   .post-card { min-height: 270px; }
   .site-footer { flex-direction: column; gap: 8px; }
 }
+
+/* Main subjects and article formats are separate; filters never change DOM order. */
+.post-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.format-tag { border-color:transparent; background:var(--mint); }
+.post-footer { flex-wrap:wrap; }
+.post-filters { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 12px; }
+.post-filters[hidden], .filter-status[hidden], .post-card[hidden], .empty-note[hidden] { display:none; }
+.category-button { font:inherit; font-size:13px; padding:8px 15px; border:1px solid var(--line); border-radius:999px; color:var(--ink); background:var(--white); cursor:pointer; }
+.category-button[aria-pressed="true"] { color:var(--white); background:var(--green); border-color:var(--green); }
+.category-button:focus-visible, .post-card:focus-visible { outline:3px solid var(--orange); outline-offset:4px; }
+.category-count { margin-left:5px; font-variant-numeric:tabular-nums; }
+.filter-status { color:var(--muted); font-size:12px; margin:0 0 20px; }
+@media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .post-card { transition:none; } }
