@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PP 和 CSP：电机运动轨迹由谁规划？ · 机器人学习笔记</title><meta name="description" content="用同一个从 0° 转到 90° 的动态演示，理解 PP 与 CSP 的指令内容、轨迹生成位置、闭环分工与机器人应用。"><meta name="color-scheme" content="light">
+<meta name="category" content="机器人"><meta property="article:section" content="机器人"><meta name="article-format" content="交互教程">
+<meta property="og:type" content="article"><meta property="og:title" content="PP 和 CSP：电机运动轨迹由谁规划？"><meta property="og:description" content="用同一个从 0° 转到 90° 的动态演示，理解 PP 与 CSP 的指令内容、轨迹生成位置、闭环分工与机器人应用。">
+<meta property="article:published_time" content="2026-11-11"><meta property="article:modified_time" content="2026-11-11">
+<link rel="canonical" href="https://mystatic.github.io/posts/pp-vs-csp.html">
+<link rel="stylesheet" href="../assets/gearboxes-explainer/style.css"><link rel="stylesheet" href="../assets/pp-csp/style.css"><script src="../assets/pp-csp/app.js" defer></script>
+</head><body><a class="skip-link" href="#article">跳到正文</a>
+<header><a href="../index.html">← 博客首页 / 机器人学习笔记</a><span>电机控制 · 从轨迹生成到位置跟踪</span></header>
+<main><aside aria-label="文章目录"><p>ON THIS PAGE</p><nav>
+<a href="#motion">01 两条指令路径</a><a href="#position">02 目的地与沿途位置</a><a href="#comparison">03 控制分工对照</a><a href="#misconceptions">04 常见误解</a><a href="#robot">05 放到机器人里</a><a href="#sources">资料与示意范围</a>
+</nav></aside><article id="article">
+
+<div class="intro">
+  <div class="eyebrow">机器人 / 交互教程</div>
+  <h1>PP 和 CSP<span>电机运动轨迹由谁规划？</span></h1>
+  <p class="lead">同样让电机从 0° 转到 90°，<strong class="pp">PP 把“目的地和运动参数”交给驱动器</strong>，<strong class="csp">CSP 把“一路上的位置点”逐周期交给驱动器</strong>。</p>
+  <div class="meta"><span>发布：2026.11.11</span><span>整理与核对：2026.11.11</span><span>约 6–8 分钟 · 1 个动态演示</span></div><p class="quiet">PP = Profile Position，轮廓位置模式。CSP = Cyclic Synchronous Position，周期同步位置模式。这里讨论的是上位控制器与驱动器之间的分工。<a class="source-tag" href="#sources">[1–3]</a></p>
+</div>
+
+<section id="motion" aria-labelledby="demo-title">
+  <div class="section-head"><h2 id="demo-title"><small>01 / SAME MOTION, DIFFERENT COMMANDS</small>同一个动作，两条指令路径</h2><span class="quiet">两者都保留驱动器内的位置闭环</span></div>
+  <noscript><p class="noscript">正文与两条指令路径仍可阅读；动态角度和参考轨迹图需要启用 JavaScript。</p></noscript><div class="demo">
+    <div class="demo-top"><strong>示例：0° → 90°</strong><span class="assumption">两边采用同一条参考轨迹：最高速度 60°/s，加、减速度均为 120°/s²，总时长 2 s。</span></div>
+    <div class="controls">
+      <button class="play" id="play" type="button">播放演示</button>
+      <button class="replay" id="replay" type="button">回到起点</button>
+      <label class="scrub" for="time"><span class="clock" id="clock">0.000 s</span><input id="time" type="range" min="0" max="2" step="0.001" value="0" aria-label="运动时刻，单位秒"></label>
+      <span class="quiet">慢放 2.5 倍</span>
+    </div>
+    <div class="lane lane-pp">
+      <div class="lane-title"><span class="mode pp">PP</span><strong>驱动器生成中间位置</strong><span class="quiet">目标已接受后，无需逐点下发整段轨迹</span></div>
+      <div class="flow">
+        <div class="zone zone-host"><span class="zone-title">上位控制器</span><div class="zone-content">目标：90°<br>速度上限：60°/s<br>加、减速度：120°/s²</div></div>
+        <div class="packet pp"><svg aria-hidden="true"><g class="across"><line x1="0" y1="16" x2="100%" y2="16"/><path d="M-7 -5 L0 0 L-7 5" transform="translate(114 16)"/></g><g class="down"><line x1="14" y1="1" x2="14" y2="46"/><path d="M9 39 L14 46 L19 39"/></g></svg><div><div class="packet-label">目标＋参数<br>新目标触发／确认</div><div class="packet-value">90°</div></div></div>
+        <div class="zone zone-drive"><span class="zone-title">驱动器</span><div class="planner">轨迹生成器在这里</div><div class="zone-content">内部位置参考：<strong id="pp-ref">0.00°</strong></div><div class="loop">位置闭环 → 速度／电流控制</div></div>
+        <div class="rotor"><svg class="motor" viewBox="0 0 100 100" role="img" aria-label="PP 电机理想角度"><circle class="motor-rim" cx="50" cy="50" r="37"/><line class="motor-target" x1="50" y1="50" x2="50" y2="13"/><g id="pp-arm"><line class="needle" x1="50" y1="50" x2="84" y2="50"/></g><circle cx="50" cy="50" r="5" fill="currentColor"/></svg><div class="angle" id="pp-angle">0.00°</div><div class="motor-label">电机 · 理想跟踪</div></div>
+      </div>
+      <div class="feedback">编码器反馈 → 驱动器本地闭环；实际位置与状态也可回传给上位控制器</div>
+    </div>
+    <div class="lane lane-csp">
+      <div class="lane-title"><span class="mode csp">CSP</span><strong>上位控制器生成中间位置</strong><span class="quiet">按约定周期连续下发位置点</span></div>
+      <div class="flow">
+        <div class="zone zone-host"><span class="zone-title">上位控制器</span><div class="planner">轨迹生成器在这里</div><div class="zone-content">按时间计算位置<br>当前输出：<strong id="host-ref">0.00°</strong></div></div>
+        <div class="packet csp"><svg aria-hidden="true"><g class="across"><line x1="0" y1="16" x2="100%" y2="16"/><path d="M-7 -5 L0 0 L-7 5" transform="translate(114 16)"/><circle id="packet-dot" cx="0" cy="16" r="4"/></g><g class="down"><line x1="14" y1="1" x2="14" y2="46"/><path d="M9 39 L14 46 L19 39"/></g></svg><div><div class="packet-label">每周期一个位置点<br>本例假设 1 ms</div><div class="packet-value" id="csp-packet">0.00°</div></div></div>
+        <div class="zone zone-drive"><span class="zone-title">驱动器</span><div class="zone-content">接收周期位置参考<br>必要的插补／限幅依实现而定</div><div class="zone-content">接收位置：<strong id="csp-ref">0.00°</strong></div><div class="loop">位置闭环 → 速度／电流控制</div></div>
+        <div class="rotor"><svg class="motor" viewBox="0 0 100 100" role="img" aria-label="CSP 电机理想角度"><circle class="motor-rim" cx="50" cy="50" r="37"/><line class="motor-target" x1="50" y1="50" x2="50" y2="13"/><g id="csp-arm"><line class="needle" x1="50" y1="50" x2="84" y2="50"/></g><circle cx="50" cy="50" r="5" fill="currentColor"/></svg><div class="angle" id="csp-angle">0.00°</div><div class="motor-label">电机 · 理想跟踪</div></div>
+      </div>
+      <div class="feedback">编码器反馈 → 驱动器本地闭环；实际位置与状态也可回传给上位控制器</div>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite">起点：PP 的 90° 是最终目标；CSP 当前发送的是 0° 这个轨迹点。</div>
+    <div class="timeline">
+      <svg id="position-chart" role="img" aria-label="相同参考位置轨迹：PP 的最终目标恒为 90 度，中间位置在驱动器内生成；CSP 的中间位置通过总线发送。"></svg>
+      <div class="legend"><span><i class="swatch"></i>PP：驱动器内生成的参考位置</span><span><i class="swatch dotted"></i>CSP：经总线发送的位置点（抽样显示）</span></div>
+      <p class="quiet" style="margin:10px 0 0">图中两条参考轨迹重合。圆点仅每 100 ms 显示一次；本例假设的实际 CSP 指令周期为 1 ms。角度为理想跟踪示意，并非实测；1 ms 不是所有驱动器的固定要求。</p>
+    </div>
+  </div>
+</section>
+
+<section id="position" aria-labelledby="read-title">
+  <h2 id="read-title"><small>02 / DESTINATION AND REFERENCE</small>把“转到 90°”拆开看</h2>
+  <div class="readings">
+    <article class="reading"><h3 class="pp">PP：给目的地，驱动器安排过程</h3><p>上位控制器设置目标和轮廓参数，按驱动器的协议触发新目标。驱动器自行生成一串连续的位置参考，再让电机跟随。<a class="source-tag" href="#source-pp">[1]</a></p><p>图中采用<strong>加速 0.5 s → 匀速 1 s → 减速 0.5 s</strong>的示例。运动到 1 s 时，电机参考位置是 45°，但上位机交给 PP 的最终目标仍是 90°。</p></article>
+    <article class="reading"><h3 class="csp">CSP：给沿途位置，驱动器逐点跟踪</h3><p>上位控制器先确定整段运动，再按统一时间轴算出每周期的位置参考并发送。驱动器跟踪这些参考，不替上位机重新规划整段点到点运动。<a class="source-tag" href="#source-csp">[2–3]</a></p><p>同一示例中，0.5 s 时发送 15°，1 s 时发送 45°，1.5 s 时发送 75°。这些是<strong>当前时刻的轨迹参考</strong>，不表示每一段都要停下来等“到位”。</p></article>
+  </div>
+</section>
+
+<section id="comparison" aria-labelledby="compare-title">
+  <h2 id="compare-title"><small>03 / CONTROL RESPONSIBILITIES</small>差别会影响什么？</h2>
+  <table class="comparison"><caption class="quiet" style="text-align:left;margin-bottom:6px">基于上述控制分工的工程判断；具体能力仍取决于驱动器与控制系统。</caption><thead><tr><th scope="col">比较项</th><th scope="col" class="pp">PP</th><th scope="col" class="csp">CSP</th></tr></thead><tbody>
+    <tr><th scope="row">轨迹谁规划</th><td>驱动器内部的轨迹生成器。</td><td>上位控制器，例如运动控制器或实时控制程序。</td></tr>
+    <tr><th scope="row">主要下发内容</th><td>最终位置、速度及加减速参数，再触发运动。</td><td>逐周期的位置参考；部分驱动器还支持速度、力矩前馈。</td></tr>
+    <tr><th scope="row">通信要求</th><td>不必逐点传送整段轨迹；仍可周期交换状态与控制数据。</td><td>需要持续、可预测的周期通信，并满足系统的同步要求。</td></tr>
+    <tr><th scope="row">修改运动</th><td>提交新的目标或参数；如何衔接、排队或立即切换由产品实现决定。</td><td>修改后续位置序列；上位控制器负责让速度、加速度等变化合理。</td></tr>
+    <tr><th scope="row">多关节配合</th><td>各轴自行生成轨迹，需要额外设计共同的运动时序。</td><td>可在同一时间轴上为多轴生成参考，便于协调；仍依赖时钟、通信和实际跟踪性能。</td></tr>
+    <tr><th scope="row">常见适用任务</th><td>点到点定位、分度、执行一段预设行程。</td><td>机器人连续轨迹、多轴协调、需要持续改变位置参考的运动。</td></tr>
+  </tbody></table>
+</section>
+
+<section id="misconceptions" aria-labelledby="notes-title">
+  <h2 id="notes-title"><small>04 / COMMON MISUNDERSTANDINGS</small>三个容易混淆的地方</h2>
+  <div class="notes">
+    <article class="note"><h3>“规划轨迹”与“闭环控制”分开看</h3><p>轨迹生成器决定每一刻应该在哪里；位置闭环利用编码器反馈纠正实际位置误差。CSP 把轨迹规划移到上位机，驱动器仍然负责本地跟踪。<a class="source-tag" href="#source-csp">[2]</a></p></article>
+    <article class="note"><h3>发送频率高，不自动等于更快、更准</h3><p>本例中两种模式的参考运动完全一样。实际速度和精度还受电机、负载、编码器、调参、轨迹和通信影响。CSP 增加的是上位机对运动时序的控制能力。</p></article>
+    <article class="note"><h3>PP 无需逐点下发，不等于可以断通信</h3><p>驱动器在内部生成轨迹，与总线断开后如何处置是两件事。通信丢失时保持、减速或报错，要看具体产品的监控和配置，不能仅凭 PP 或 CSP 名称判断。</p></article>
+  </div>
+</section>
+
+<section id="robot" aria-labelledby="robot-title">
+  <h2 id="robot-title"><small>05 / ROBOT APPLICATIONS</small>放到机器人里怎么理解？</h2>
+  <p>让某个关节从一个位置转到另一个位置，PP 的接口通常比较直接。让多个关节按共同时间轴完成一条末端轨迹，CSP 更便于由上位控制器统一安排各关节的位置参考。这是从控制分工得到的选择思路，并非仅凭模式名称就能保证效果。</p>
+  <p>如果机器人策略的动作输出频率低于 CSP 通信频率，可以在两者之间加入轨迹处理：<strong>策略输出 → 轨迹衔接／插补与约束检查 → 周期位置参考 → 驱动器</strong>。策略更新频率、通信周期与驱动器内部控制频率，是三个不同的概念。</p>
+  <div class="pills"><span class="pill">PP：驱动器规划＋驱动器跟踪</span><span class="pill">CSP：上位机规划＋驱动器跟踪</span></div>
+</section>
+
+<section class="sources" id="sources"><h2><small>READ FURTHER</small>资料与示意范围</h2>
+
+  <p style="margin:6px 0">本页依据厂商对 CiA 402 模式的说明。动画采用自行构造的梯形速度示例，不代表任何具体电机的实测性能。内部环路画法是常见结构的简化，具体控制结构、插补、单位与限幅依产品而定。页面离线可用，只有以下资料链接需要联网。</p>
+  <ol>
+    <li id="source-pp"><a href="https://doc.synapticon.com/circulo/sw5.4/motion_control/operation_modes/profiled_modes/profile_position.html" target="_blank" rel="noopener noreferrer">Synapticon · Profile position mode</a>：内部轨迹生成、速度／加减速参数、新目标握手。</li>
+    <li id="source-csp"><a href="https://doc.synapticon.com/circulo/sw5.4/motion_control/operation_modes/cyclic_modes/csp.html" target="_blank" rel="noopener noreferrer">Synapticon · Cyclic Synchronous Position Mode</a>：上位机生成轨迹、驱动器跟踪、反馈及可选前馈。</li>
+    <li><a href="https://webhelp.kollmorgen.com/akd2g/english/Content/AKD2G%20CANopen/CANopen%20Cyclic%20Synchronous%20Position%20Mode.htm" target="_blank" rel="noopener noreferrer">Kollmorgen AKD2G · Cyclic Synchronous Position Mode</a>：周期参考及驱动器侧插补的产品实例。</li>
+    <li><a href="https://support.maxongroup.com/hc/en-us/article_attachments/360021656160" target="_blank" rel="noopener noreferrer">maxon EPOS4 · Profile / Cyclic Synchronous operating modes</a>：内、外部轨迹生成位置与周期通信说明。</li>
+  </ol>
+<button id="print-page" type="button">打印 / 保存 PDF</button></section>
+<footer>机器人学习笔记 · 动态演示与正文可离线使用</footer></article></main></body></html>
