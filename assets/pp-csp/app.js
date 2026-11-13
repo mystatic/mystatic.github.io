@@ -119,20 +119,71 @@ const MotorMath = Object.freeze({
   estimate(state) { return state.feedforward+state.feedback; }
 });
 
+// Radians internally. A bounded, illustrative single-joint plant, not a motor model.
+const MotorDynamics = Object.freeze({
+  inertia: .25, drag: .1, torqueLimit: 8, angleLimit: 150*Math.PI/180, stepSize: .002,
+  torque(state, command) {
+    const terms=MotorMath.mit({...command,q:state.q*180/Math.PI,v:state.v});
+    const applied=Math.max(-this.torqueLimit,Math.min(this.torqueLimit,terms.total));
+    return {...terms,applied,acceleration:(applied-this.drag*state.v-command.load)/this.inertia};
+  },
+  step(state,command,h=this.stepSize) {
+    // RK4 recomputes PD feedback and torque saturation at every stage.
+    const f=(q,v)=>({q:v,v:this.torque({q,v},command).acceleration});
+    const a=f(state.q,state.v),b=f(state.q+h*a.q/2,state.v+h*a.v/2);
+    const c=f(state.q+h*b.q/2,state.v+h*b.v/2),d=f(state.q+h*c.q,state.v+h*c.v);
+    let q=state.q+h*(a.q+2*b.q+2*c.q+d.q)/6;
+    let v=state.v+h*(a.v+2*b.v+2*c.v+d.v)/6;
+    const hitLimit=Math.abs(q)>=this.angleLimit;
+    if(hitLimit){q=Math.max(-this.angleLimit,Math.min(this.angleLimit,q));v=0;}
+    return {q,v,time:state.time+h,hitLimit};
+  }
+});
+
 (() => {
   'use strict';
   const $=id=>document.getElementById(id);
   const signed=(n,d=3)=>(Math.abs(n)<.5*10**(-d)?0:n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d,signDisplay:'exceptZero',useGrouping:false});
   const value=id=>Number($(id).value);
-  const mitIds=['mit-qd','mit-q','mit-vd','mit-v','mit-kp','mit-kd','mit-ff'];
+  const mitIds=['mit-qd','mit-vd','mit-kp','mit-kd','mit-ff','mit-load'];
   function controlReadout(id) {
-    const input=$(id), digits=id==='load-fixed'?3:id==='load-radius'||id==='load-mass'?2:['mit-vd','mit-v','mit-kd','mit-ff'].includes(id)?1:0;
+    const input=$(id), digits=id==='load-fixed'?3:id==='load-radius'||id==='load-mass'?2:['mit-vd','mit-kd','mit-ff','mit-load'].includes(id)?1:0;
     $(id+'-value').textContent=value(id).toFixed(digits)+' '+input.dataset.unit;
+  }
+  let joint={q:0,v:0,time:0,hitLimit:false},running=false,animation=0,last=null,accumulator=0,steps=0;
+  let history=[];
+  const command=()=>({qd:value('mit-qd'),vd:value('mit-vd'),kp:value('mit-kp'),kd:value('mit-kd'),ff:value('mit-ff'),load:value('mit-load')});
+  function sample() {
+    const target=value('mit-qd'),actual=joint.q*180/Math.PI;
+    history.push({time:joint.time,target,actual,error:target-actual});
+    while(history.length>1 && history[0].time<joint.time-8)history.shift();
+    if(history.length>500)history.splice(0,history.length-500);
+  }
+  function drawHistory() {
+    const svg=$('mit-history'),w=Math.max(240,svg.getBoundingClientRect().width),h=245,left=42,right=w-12;
+    svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.replaceChildren();
+    const el=(tag,attrs,text)=>{const n=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));if(text!==undefined)n.textContent=text;return n;};
+    const end=Math.max(8,joint.time),start=end-8,x=t=>left+(t-start)/8*(right-left);
+    const maxAngle=Math.max(45,...history.flatMap(s=>[Math.abs(s.target),Math.abs(s.actual)]))*1.1;
+    const maxError=Math.max(5,...history.map(s=>Math.abs(s.error)))*1.1;
+    svg.append(el('title',{},'MIT 动态响应：角度和误差随仿真时间变化'));
+    for(const [center,span,label] of [[66,maxAngle,'角度 °'],[177,maxError,'误差 °']]) {
+      svg.append(el('text',{x:0,y:center-43},label));
+      for(const factor of [-1,0,1]) {
+        const y=center-factor*33;
+        svg.append(el('line',{x1:left,x2:right,y1:y,y2:y,stroke:'var(--line)','stroke-dasharray':factor===0?'':'3 4'}));
+        svg.append(el('text',{x:left-5,y:y+4,'text-anchor':'end'},(factor*span).toFixed(0)));
+      }
+    }
+    for(const [key,center,scale,color,dash] of [['target',66,maxAngle,'var(--orange)','5 4'],['actual',66,maxAngle,'var(--green)',''],['error',177,maxError,'var(--orange)','']]) {
+      const points=history.map(s=>`${x(s.time).toFixed(1)},${(center-s[key]/scale*33).toFixed(1)}`).join(' ');
+      svg.append(el('polyline',{points,fill:'none',stroke:color,'stroke-width':2,'stroke-dasharray':dash}));
+    }
+    for(const t of [start,start+4,end])svg.append(el('text',{x:x(t),y:239,'text-anchor':t===start?'start':t===end?'end':'middle'},t.toFixed(1)+' s'));
   }
   function updateMit() {
     mitIds.forEach(controlReadout);
-    const qd=value('mit-qd'),q=value('mit-q');
-    const t=MotorMath.mit({qd,q,vd:value('mit-vd'),v:value('mit-v'),kp:value('mit-kp'),kd:value('mit-kd'),ff:value('mit-ff')});
+    const cmd=command(),q=joint.q*180/Math.PI,t=MotorDynamics.torque(joint,cmd);
     const scale=Math.max(1,...[t.position,t.velocity,t.feedforward,t.total].map(Math.abs))*1.15;
     [['torque-p',t.position],['torque-d',t.velocity],['torque-ff',t.feedforward],['torque-total',t.total]].forEach(([id,n])=>{
       $(id+'-number').textContent=signed(n)+' N·m';
@@ -140,14 +191,54 @@ const MotorMath = Object.freeze({
       bar.style.width=width+'%';bar.style.left=(n<0?50-width:50)+'%';bar.classList.toggle('negative',n<0);
     });
     $('bar-scale').textContent='单侧满量程 '+scale.toFixed(2)+' N·m';
-    $('mit-target-arm').setAttribute('transform',`rotate(${-qd} 65 160)`);
-    $('mit-actual-arm').setAttribute('transform',`rotate(${-q} 65 160)`);
-    $('mit-target-readout').textContent=qd+'°';$('mit-actual-readout').textContent=q+'°';
-    $('mit-result').textContent=`位置误差 ${signed(qd-q,2)}°（${signed(MotorMath.radians(qd-q),4)} rad）；总指令力矩 ${signed(t.total)} N·m。`;
+    $('mit-target-arm').setAttribute('transform',`rotate(${-cmd.qd} 160 160)`);
+    $('mit-actual-arm').setAttribute('transform',`rotate(${-q} 160 160)`);
+    $('mit-target-readout').textContent=cmd.qd.toFixed(1)+'°';$('mit-actual-readout').textContent=q.toFixed(2)+'°';
+    $('mit-error').textContent=signed(cmd.qd-q,2)+'°';$('mit-speed').textContent=signed(joint.v)+' rad/s';
+    $('mit-applied').textContent=signed(t.applied)+' N·m';$('mit-clock').textContent=joint.time.toFixed(2)+' s';
+    $('mit-limit').textContent=Math.abs(t.total)>MotorDynamics.torqueLimit?'指令超过 ±8 N·m，执行力矩已限幅。':'执行力矩未限幅；角度限位 ±150°。';
+    $('mit-result').textContent=`当前误差 ${signed(cmd.qd-q,2)}°，实际速度 ${signed(joint.v)} rad/s。执行力矩 ${signed(t.applied)}、物理阻尼力矩 ${signed(-MotorDynamics.drag*joint.v)}、外力矩 ${signed(-cmd.load)} N·m 共同决定加速度。`;
+    drawHistory();
   }
-  const presets={hold:[30,20,0,0,20,1,0],damping:[30,20,0,1,0,2,0],torque:[30,20,0,0,0,0,2]};
-  for(const [name,values] of Object.entries(presets)) $('preset-'+name).addEventListener('click',()=>{mitIds.forEach((id,i)=>$(id).value=values[i]);updateMit();});
-  mitIds.forEach(id=>$(id).addEventListener('input',updateMit));
+  function stopMit(message) {
+    running=false;last=null;accumulator=0;cancelAnimationFrame(animation);
+    $('mit-play').textContent='继续运行';$('mit-play').setAttribute('aria-pressed','false');
+    if(message)$('mit-status').textContent=message;
+  }
+  function tickMit(now) {
+    if(!running)return;
+    if(last!==null)accumulator+=Math.min(.1,Math.max(0,(now-last)/1000));
+    last=now;
+    const cmd=command();
+    while(accumulator+1e-12>=MotorDynamics.stepSize){
+      joint=MotorDynamics.step(joint,cmd);accumulator-=MotorDynamics.stepSize;steps++;
+      if(steps%10===0)sample();
+      if(joint.hitLimit){sample();stopMit('已到 ±150° 演示限位，自动暂停并清零速度。请复位，或改变指令使连杆向内运动。');break;}
+    }
+    updateMit();if(running)animation=requestAnimationFrame(tickMit);
+  }
+  function runMit(message) {
+    if(message)$('mit-status').textContent=message;
+    if(running)return;
+    running=true;last=null;accumulator=0;$('mit-play').textContent='暂停';$('mit-play').setAttribute('aria-pressed','true');
+    animation=requestAnimationFrame(tickMit);
+  }
+  function resetMit(initialVelocity=0) {
+    stopMit();joint={q:0,v:initialVelocity,time:0,hitLimit:false};steps=0;history=[];sample();updateMit();
+  }
+  const presets={hold:[30,0,20,2,1,1],oscillate:[30,0,20,.1,1,1],damping:[30,0,0,2,0,0],torque:[30,0,0,0,1,0]};
+  for(const [name,values] of Object.entries(presets)) $('preset-'+name).addEventListener('click',()=>{
+    mitIds.forEach((id,i)=>$(id).value=values[i]);resetMit(name==='damping'?1:0);
+    runMit(name==='damping'?'纯阻尼：初始速度 +1 rad/s，观察速度衰减；位置不受约束。':name==='torque'?'纯力矩：没有位置反馈，持续出力会使连杆运动，直至演示限位。':'运行中；调参立即生效。稳态后可点“轻推一下”比较阻尼。');
+  });
+  mitIds.forEach(id=>$(id).addEventListener('input',()=>{sample();updateMit();runMit('参数已更新，继续闭环运动；历史曲线保留。');}));
+  $('mit-play').addEventListener('click',()=>running?stopMit('已暂停，可检查瞬时力矩。再次运行或调参将继续。'):runMit('运行中；实时计算力矩、速度和角度。'));
+  $('mit-reset').addEventListener('click',()=>{resetMit();$('mit-status').textContent='已复位到 0°、0 rad/s；参数保留。点击运行或调参开始。';});
+  $('mit-push').addEventListener('click',()=>{joint.v+=1;sample();updateMit();runMit('已施加瞬时 +1 rad/s 速度扰动，观察误差恢复与振荡衰减。');});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stopMit('页面进入后台，仿真已暂停；点击继续运行。');});
+  window.addEventListener('pagehide',()=>stopMit());window.addEventListener('beforeprint',()=>stopMit('打印当前仿真快照；已暂停。'));
+  new ResizeObserver(drawHistory).observe($('mit-history'));
+  sample();
   let state;
   const loadIds=['load-mass','load-radius','load-kp','load-fixed'];
   function updateLoad() {
