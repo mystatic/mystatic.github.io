@@ -156,6 +156,7 @@
 </div><div>
 <svg class="joint-diagram" viewBox="0 0 320 290" role="img" aria-labelledby="load-diagram-title"><title id="load-diagram-title">目标方向、实际平衡方向及负载重心</title><path d="M35 170 H290" class="joint-axis"/><path d="M55 170 L189.23 92.5" class="target-link"/><g id="load-actual-arm" transform="rotate(-24.901839 55 170)"><path id="load-link" d="M55 170 H155.71" class="actual-link"/><circle id="load-com" cx="155.71" cy="170" r="12" class="joint-end"/></g><circle cx="55" cy="170" r="9" fill="currentColor"/><path id="load-gravity-arrow" d="M146.35 127.56 v42 m-5 -7 l5 7 l5 -7" class="gravity-arrow"/><text x="28" y="280">圆点：重心 · 箭头：重力向下</text></svg>
 <p class="caption">虚线：30° 目标；实线：平衡位置。长度随重心距离示意变化。</p>
+<p class="caption result-assumptions"><strong>读数条件：</strong>目标 30°；本体重力已补偿；静止、无摩擦、无接触、无积分、无力矩限幅。正力矩向上。</p>
 <dl class="load-metrics"><div><dt>实际平衡角度</dt><dd id="load-angle">24.902°</dd></div><div><dt>目标减实际的误差</dt><dd id="load-error">+5.098°</dd></div><div><dt>位置反馈力矩</dt><dd id="load-feedback">+1.780 N·m</dd></div><div><dt>当前负载前馈</dt><dd id="load-feedforward">0.000 N·m</dd></div><div><dt>真实负载重力矩</dt><dd id="load-gravity">1.780 N·m</dd></div><div><dt>平衡方程残差</dt><dd id="load-residual">&lt; 10⁻⁹ N·m</dd></div></dl>
 <p class="caption" id="load-model-status">控制器未使用负载模型；反馈因位置偏差而出力。</p>
 <h4>如果姿态改变，需要多少补偿？</h4>
