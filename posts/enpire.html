@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ENPIRE：机器人怎样通过真实实验改进策略</title>
+  <link rel="stylesheet" href="../assets/enpire/aa0c958c2590e6d4f7684c9f3ecf594179a151a0abb45f7591b99ece2debbee1.css">
+
+<link rel="canonical" href="https://mystatic.github.io/posts/enpire.html">
+<link rel="stylesheet" href="../assets/enpire/b5839325c850d22797b18d80e99e9440a23df9ba8f6e1525a7a9199dcef835f1.css">
+<script defer src="../assets/enpire/4df9e50b07fa678a79de038936c1c560f8a74691f489c8d9549d249f0e5bb21b.js"></script>
+</head>
+<body>
+  <div class="report-shell">
+    <nav class="report-toc" aria-label="内容阅读地图"><a class="blog-home" href="https://mystatic.github.io/">← 阅读笔记首页</a><details class="toc-details" open><summary class="toc-label">阅读地图 · 按问题阅读</summary><ol><li class="toc-depth-2"><a href="#研究目的">从什么问题出发</a></li>
+<li class="toc-depth-2"><a href="#一句话结论">核心思路是什么</a></li>
+<li class="toc-depth-2"><a href="#论文信息与证据范围">依据哪些材料</a></li>
+<li class="toc-depth-2"><a href="#问题动机">为什么需要这个设计</a></li>
+<li class="toc-depth-2"><a href="#核心机制">四个模块如何配合</a></li>
+<li class="toc-depth-2"><a href="#训练数据流">一条样本怎样更新参数</a></li>
+<li class="toc-depth-2"><a href="#推理数据流">一次输入怎样变成结果</a></li>
+<li class="toc-depth-2"><a href="#流程图">把训练与运行接起来</a></li>
+<li class="toc-depth-2"><a href="#两类改进路线程序bc-与-rl-分别怎样学">程序、BC 与 RL 分别怎样学</a></li>
+<li class="toc-depth-2"><a href="#多机器人研究经验保存与-vla-组合">怎样共享实验与迁移经验</a></li>
+<li class="toc-depth-2"><a href="#实验">实验究竟证明了什么</a></li>
+<li class="toc-depth-2"><a href="#局限">哪些问题仍未解决</a></li>
+<li class="toc-depth-2"><a href="#对-vla机器人落地的意义">怎样联系自己的系统</a></li>
+<li class="toc-depth-2"><a href="#证据边界与参考资料">回到一手证据</a></li></ol></details></nav>
+    <main class="report-main" id="content"><h1 id="enpire机器人怎样通过真实实验改进策略">ENPIRE：机器人怎样通过真实实验改进策略</h1><p class="publish-meta">机器人 · 技术解读 · 发布于 2026.11.16 · 架构图与 9 段官方演示</p>
+<h2 id="研究目的">研究目的</h2>
+<p>机器人要把一根销钉插进孔里。一次失败后，下一次该怎么办？可以修改搜索轨迹，可以增加示范，可以继续强化学习，也可以检查是不是控制偏差导致每次都卡在同一个位置。困难在于：这些尝试需要反复复位场景、判断结果、保留数据、诊断失败，再决定修改什么。过去，这些工作往往由研究人员衔接。</p>
+<p><strong>ENPIRE 的研究目标，是把这套真实世界实验过程组织成编码 Agent 能持续操作的闭环。</strong> 它研究的对象既包括机器人策略，也包括“发现一个更好策略的过程”。把这两件事分开，才能看懂论文中的自主研究、在线学习和失败重试各自发生在哪里。<a href="https://arxiv.org/html/2606.19980v2#S1" rel="noopener noreferrer">论文 §1–2</a></p>
+<p>本文围绕插销任务展开，读完应能回答五个问题：为什么先建环境；Agent、学习器与机器人分别做什么；一条轨迹怎样改变策略；一次策略输出怎样到达机器人并得到核验；哪些实验支持机制、哪些证据仍不充分。</p>
+<h3 id="先看全局再沿一条轨迹往下走">先看全局，再沿一条轨迹往下走</h3>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/7264ddd5935b52715dd053cb3fa2340bd6e09823e404964dd36970fde4bc26a6.png" alt="ENPIRE 架构总览：每个模块的贡献与实验反馈闭环" loading="lazy"></button><figcaption>ENPIRE 架构总览：每个模块的贡献与实验反馈闭环</figcaption></figure></p>
+<p>先读上方 <strong>EN</strong>：它提供复位、核验和操作约束。再沿中间 <strong>E → PI → R</strong> 看一轮研究：根据反馈选方案，把想法做成候选程序或权重，再交给机器人验证；实验记录返回下一轮研究。底部区分 Agent 改方案、学习器改权重、机器人改变物理状态三种循环。E 与 PI 是职责划分，可由同一编码 Agent 承担。</p>
+<p>图为依据论文 §2 与附录 B 整理的教学概括；点击可放大查看。<a href="../assets/enpire/ENPIRE-architecture.drawio">下载可编辑 draw.io 架构图</a>。</p>
+<p>建议顺序：先读“核心机制”的环境与三层循环，再读训练和推理数据流；随后进入 BC／RL 算例、并行研究与实验审查。陌生概念会在第一次使用时解释，不需要先学完一门强化学习课程。</p>
+<p><strong>阅读与播放。</strong>本文含 9 段 NVIDIA 官方视频，按正文顺序整理成同一个 B 站 9P 稿件。点击封面加载对应分 P，切换或收起会停止上一段。图片与架构图可点击放大。视频保留原片时间轴；博客初始按 B 站播放器速度播放，可用平台控件调整。</p>
+<h2 id="一句话结论">一句话结论</h2>
+<p><strong>ENPIRE 将经过人类反馈建立的复位、验证和控制接口固定下来，使编码 Agent 能依据真实机器人实验，搜索程序策略、学习算法及训练配置，并通过再次执行检验改进。</strong> 论文支持的是在特定任务与环境条件下的自主策略研发；“自主”成立的范围，需要连同环境准备、数据来源、重试协议和评估方式一起读。<a href="https://arxiv.org/html/2606.19980v2#S2" rel="noopener noreferrer">论文 §2</a></p>
+<h2 id="论文信息与证据范围">论文信息与证据范围</h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>本文采用的材料与范围</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>论文</td>
+<td><em>ENPIRE: Agentic Robot Policy Self-Improvement in the Real World</em>，Wenli Xiao、Jia Xie、Tonghe Zhang 等，NVIDIA／CMU／UC Berkeley</td>
+</tr>
+<tr>
+<td>版本</td>
+<td>arXiv:2606.19980v2；arXiv 标注修订日期为 2026-09-20，下载 PDF 共 28 页，封面另印有 2026-9-22。本文以版本号定位，不据封面推断另一版本</td>
+</tr>
+<tr>
+<td>已阅读</td>
+<td>正文、附录 A–D；核对机制、数据与控制接口、实验协议、局限；查看关键架构图、结果图与附录图</td>
+</tr>
+<tr>
+<td>代码快照</td>
+<td>NVlabs/ENPIRE，提交 <code>99ee90acf65b5b18957c8382ad580db999528be3</code>；核查日期 2026-11-14</td>
+</tr>
+<tr>
+<td>代码核查范围</td>
+<td>README、研究合同、插销配置、PLD 训练入口、SACMini、磁盘轨迹读取、动作桥接、延迟奖励处理及滚动成功率计算</td>
+</tr>
+<tr>
+<td>辅助对照</td>
+<td>ASPIRE v2 的方法说明，仅用于解释程序、经验库与权重更新的区别</td>
+</tr>
+<tr>
+<td>验证性质</td>
+<td>阅读和静态代码检查；未运行机器人、未训练模型、未复现实验</td>
+</tr>
+</tbody></table>
+<p>本文中的 <strong>论文事实</strong> 来自原文；<strong>代码事实</strong> 来自上述固定提交；<strong>作者报告结果</strong> 保留原实验归属；<strong>教学重建</strong> 用于帮助理解；<strong>工程判断</strong> 表示由证据推导的含义；<strong>未知</strong> 表示材料没有交代或本次没有核实。后文每个重要结论尽量就近注明来源。</p>
+<p>代码快照不等于论文每条实验曲线的完整配置。公开 README 明确指出，数据、模型权重和站点地址放在外部；仅看到训练实现，不能声称所有实验已经具备完整复现材料。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/README.md" rel="noopener noreferrer">仓库 README</a>；<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/README.md" rel="noopener noreferrer">PLD README</a></p>
+<h2 id="问题动机">问题动机</h2>
+<h3 id="为什么只让大模型生成动作或代码还不够">为什么只让大模型生成动作或代码还不够</h3>
+<p>假设 Agent 写出一段“定位孔口、对齐、下压”的程序。程序能运行，只能说明调用顺序基本成立。如果销钉滑了、孔口被挡住、下压方向偏了，研究者还需要知道：究竟哪一步失败，怎样让场景回到可比较的起点，以及下一次修改是否真的更好。</p>
+<p>仿真常把这些能力封装为现成接口。真机却需要在物理世界完成复位，成功判定也依赖传感器和阈值。摩擦、接触、相机遮挡、装夹状态都会随时间和硬件变化。因而，数字环境里能反复改程序的 Agent，直接接上机械臂后并不会自动获得可靠的实验流程。<a href="https://arxiv.org/html/2606.19980v2#S3.SS1" rel="noopener noreferrer">论文 §1、§3.1</a></p>
+<p>ENPIRE 选择先建设实验环境，再开放策略侧的改进空间。这使“我觉得新方案更好”可以转化为“在同一复位与评分条件下，重新执行并比较结果”。其核心贡献是把物理研究闭环做成可操作的系统；BC、RL、运动规划等方法是可被它调用和修改的组成部分。</p>
+<h3 id="插销任务的真正边界">插销任务的真正边界</h3>
+<p>贯穿本文的终点是：销钉被插入并保持在位，固定验证器给出成功。原图给出的起点准备包含拾取销钉、摆正姿态并悬停在孔上方；学习往往集中在最困难的精密插入阶段。拾取、交接和悬停可由程序化复位技能负责，不能一概归为学习策略自行学会的能力。<a href="https://arxiv.org/html/2606.19980v2#S2.SS1" rel="noopener noreferrer">论文图 9、§2.1</a></p>
+<p>论文有两处尺寸措辞：§2.2 写 “4 mm clearance”，§3 写孔直径为 4 mm。这两者物理含义不同，本文只将其称为精密插销任务，不据此给出未经核实的销孔配合公差。</p>
+<h2 id="核心机制">核心机制</h2>
+<h3 id="四个模块两个阶段">四个模块，两个阶段</h3>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/57a399f2977cff39daa971d6cd056b4bfb1af72e3cd6b27be97978162349b823.png" alt="ENPIRE 原论文图 2：环境构建、策略改进与实验进展" loading="lazy"></button><figcaption>ENPIRE 原论文图 2：环境构建、策略改进与实验进展</figcaption></figure></p>
+<p>原论文图 2，PDF 第 2 页；使用官方 HTML 提供的原始 PNG。左侧为环境构建，中间为机器人与工具，右侧为策略改进，底部为一个研究过程的改进轨迹。图中的方法名称表示可探索的方案，不代表每个任务都同时运行全部方案。</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>输入与输出</th>
+<th>谁负责、什么时候运行</th>
+<th>需要保住的边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>EN：Environment</td>
+<td>任务、传感器与人工反馈 → 复位、验证和约束接口</td>
+<td>设置阶段由 Agent 配合人类建立；实验时反复调用</td>
+<td>研究策略时固定这些接口，避免改变考题或评分规则</td>
+</tr>
+<tr>
+<td>PI：Policy Improvement</td>
+<td>当前策略、数据与候选方案 → 改后的程序或策略权重</td>
+<td>Agent 组织试验；需要梯度时由学习器执行</td>
+<td>“改程序”与“训练网络”是不同更新</td>
+</tr>
+<tr>
+<td>R：Rollout</td>
+<td>策略与初始环境 → 动作、轨迹、视频、奖励和结果</td>
+<td>每次机器人实验</td>
+<td>动作发出后还要观察真实响应</td>
+</tr>
+<tr>
+<td>E：Evolution</td>
+<td>实验记录与其他分支成果 → 下一假设、代码修改与保留决策</td>
+<td>一轮或多轮实验后，异步进行</td>
+<td>搜索依据是实验反馈，并没有一条适用所有路线的统一梯度公式</td>
+</tr>
+</tbody></table>
+<p>第一阶段是<strong>环境构建</strong>：人提供任务要求、评价和少量成功／失败资料，Agent 编写并改进环境相关程序。第二阶段是<strong>策略改进</strong>：环境接口固定，Agent 改策略侧代码、训练方案并反复评估。论文把前期人工投入视为可在后续实验中摊销的成本；这不表示每个新任务无需设置。<a href="https://arxiv.org/html/2606.19980v2#S2" rel="noopener noreferrer">论文 §2.1–2.2</a></p>
+<p>从设计走向证据，要分别检查环境反馈、策略进步与研究效率。<a href="#实验">实验导读</a>会把每项设计连接到对应比较，不把不同任务排列成同一模型的训练阶段。</p>
+<h3 id="先消除术语歧义">先消除术语歧义</h3>
+<table>
+<thead>
+<tr>
+<th>术语</th>
+<th>一般含义与本文具体角色</th>
+<th>表示、粒度与发生阶段</th>
+<th>最容易混淆的对象</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>编码 Agent</td>
+<td>根据证据生成、执行和修改代码的研究执行者</td>
+<td>读任务、文件、图像和日志，输出代码／配置；主要在研究循环</td>
+<td>不等于每个控制周期输出动作的策略网络</td>
+</tr>
+<tr>
+<td>Policy／策略</td>
+<td>由观测决定动作或工具调用的规则</td>
+<td>可以是一段 Python 程序，也可以是神经网络；执行阶段使用</td>
+<td>不必然是 VLA，也不必然需要训练</td>
+</tr>
+<tr>
+<td>Code-as-Policy／CaP</td>
+<td>把程序作为策略</td>
+<td>程序组合感知、规划与控制工具；运行时执行，研究时修改</td>
+<td>不是把代码文字直接发送给电机</td>
+</tr>
+<tr>
+<td>BC／行为克隆</td>
+<td>模仿记录中的动作</td>
+<td>观测—动作样本 → 策略损失 → 参数；训练时使用</td>
+<td>不利用 critic 判断新动作的长期价值</td>
+</tr>
+<tr>
+<td>RL／强化学习</td>
+<td>利用奖励改进决策</td>
+<td>转移样本、奖励与价值估计 → 更新策略；采集和训练可并行</td>
+<td>失败后再试一次并不自动构成 RL</td>
+</tr>
+<tr>
+<td>actor 网络／actor 进程</td>
+<td>前者是动作策略，后者负责运行策略与通信</td>
+<td>网络输出动作；进程持有一份可更新的网络参数</td>
+<td>论文的 coding agent 与 actor 网络是不同主体</td>
+</tr>
+<tr>
+<td>learner／学习器</td>
+<td>执行参数更新的进程</td>
+<td>从缓冲区取批次，更新网络，发布权重</td>
+<td>不是提出研究假设的大模型</td>
+</tr>
+<tr>
+<td>critic／Q 网络</td>
+<td>估计某观测下某动作的预期回报</td>
+<td>输入观测与动作，输出价值；主要用于 RL 训练</td>
+<td>不是直接检查销钉是否插好的验证器</td>
+</tr>
+<tr>
+<td>replay／demo buffer</td>
+<td>可重复抽样的轨迹数据存储</td>
+<td>按转移保存数据；公开实现按动作来源分流</td>
+<td>数据存储不是 Agent 的文字记忆</td>
+</tr>
+<tr>
+<td>PLD／RLPD／SERL</td>
+<td>既有机器人学习方法与系统设计来源</td>
+<td>本文借用 PLD 管线、SERL 异步设计与 RLPD 风格数据混合</td>
+<td>这些名字不意味着 ENPIRE 的全部策略都是残差 VLA</td>
+</tr>
+<tr>
+<td>pass@8</td>
+<td>本文对带反馈重试的成功指标的称呼</td>
+<td>官网定义为一次长程 rollout 内，每个子任务最多 8 次上下文重试</td>
+<td>不是 8 次独立抽样择优，也不是首次成功率</td>
+</tr>
+<tr>
+<td>MRU／MTU</td>
+<td>机器人利用率与 token 使用指标</td>
+<td>研究过程的资源统计；MTU 单位和聚合口径需结合图表</td>
+<td>不是机器人任务成功率</td>
+</tr>
+</tbody></table>
+<p>术语来源：<a href="https://arxiv.org/html/2606.19980v2#S2" rel="noopener noreferrer">论文 §2–3、附录 B</a>；<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/README.md" rel="noopener noreferrer">公开代码说明</a>。</p>
+<h3 id="环境为何必须能复位能判断能约束">环境为何必须能复位、能判断、能约束</h3>
+<p><strong>复位决定下一次实验从哪里开始。</strong> 插销失败后，销钉可能仍在夹爪里、已经落到桌上，也可能半插在孔中。固定复位程序需要识别状态，取出或重新拾取对象，再返回合适的悬停位置。论文列举了 SAM3 分割、BundleSDF 位姿跟踪、cuRobo 规划和夹爪力矩检查等工具；不是所有工具都被每个任务使用。<a href="https://arxiv.org/html/2606.19980v2#A1.SS1" rel="noopener noreferrer">附录 A.1</a></p>
+<p><strong>验证决定学习的方向是否正确。</strong> 插销图 9 的判定组合了视觉对齐、从本体状态得到的插入深度，以及关节力矩推算的接触信息。只看图像中的投影重合可能把“在孔上方悬空”判为成功；只看末端降低又可能把“在孔外下压”判为成功。组合信号的目的，是排除这些不同的假阳性。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/2a343f047e795749a38b9948cc327b3c787a3a9bb155ff5e83637956e6ee3bc2.png" alt="原论文图 9：插销的验证信号与自动复位" loading="lazy"></button><figcaption>原论文图 9：插销的验证信号与自动复位</figcaption></figure></p>
+<p>原论文图 9，PDF 第 17 页；原始 PNG。左侧展示对齐、过高、受力过大与成功情形，右侧展示准备过程。图内程序是概念化示例，不能据此恢复完整阈值、力估计器或控制实现。</p>
+<p>可以用下面的<strong>教学形式化</strong>概括多条件成功判定。视觉对齐、插入深度、接触状态分别通过既定检查时，输出成功：</p>
+<div class="equation" aria-label="r_t = \mathbf{1}\!\left[A_t \land D_t \land F_t\right]"><math display="block" class="tml-display" style="display:block math;"><mrow><msub><mi>r</mi><mi>t</mi></msub><mo>=</mo><mn>𝟏</mn><mrow style="margin-left:-0.1667em;"></mrow><mrow><mo fence="true" form="prefix" stretchy="true">[</mo><msub><mi>A</mi><mi>t</mi></msub><mo>∧</mo><msub><mi>D</mi><mi>t</mi></msub><mo>∧</mo><msub><mi>F</mi><mi>t</mi></msub><mo fence="true" form="postfix" stretchy="true">]</mo></mrow></mrow></math></div>
+<p>这里 t 是被检查的观测时刻；A、D、F 分别表示三类检查的布尔结果。它们由固定验证程序计算，而不是由 critic 预测。接触检查的确切数值范围、滤波与标定参数为 <code>UNKNOWN_FROM_PAPER</code>；不能把“检测到力”简单替换为“力越大越成功”。</p>
+<p><strong>约束决定什么尝试可以发生。</strong> 论文设置可操作的构型和运动范围，违反限制导致失败、终止或截断，并触发复位。关节控制和夹爪限力由下层承担。编码 Agent 在研究阶段不能通过放宽边界来获得更高分。<a href="https://arxiv.org/html/2606.19980v2#S2.SS1" rel="noopener noreferrer">论文 §2.1、附录 B.3</a></p>
+<p>这一环境设计首先要保证评分与起点可信；<a href="#自动评分和复位怎样支撑可信的实验">环境证据审查</a>将检查作者实际验证了什么，以及还缺哪些可靠性指标。</p>
+<h4 id="看复位视频一次实验结束后怎样重新得到可用起点">看复位视频：一次实验结束后，怎样重新得到可用起点</h4>
+<figure class="report-video"><div class="pb-video" data-part="1" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=1&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P1：真机插销自动复位 · 官网随机初态 1"><img src="../assets/enpire/4eac0a350c4fec8750cd9c9c1ac4324df02b96837d59712a61e68c19e126ab45.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P1</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=1" target="_blank" rel="noopener noreferrer">在B站打开 P1 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机插销自动复位 · 官网随机初态 1</figcaption></figure>
+<figure class="report-video"><div class="pb-video" data-part="2" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=2&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P2：真机插销自动复位 · 官网随机初态 3"><img src="../assets/enpire/3fa715967117983aba7c6ec69ca74f1d5b16d1bf8e0f19fa9616853818c02449.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P2</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=2" target="_blank" rel="noopener noreferrer">在B站打开 P2 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机插销自动复位 · 官网随机初态 3</figcaption></figure>
+<p><strong>观看重点。</strong> 对照两段开头的物体与夹爪状态，再跟随夹持、搬运和姿态调整，找出复位何时把场景交回插入策略。这里选了官网选择器中的两个随机初态；它们不是两次模型更新。回到可用起点所花的动作和时间，也是自主实验的成本。某次动作若未达到预期，之后的调整首先属于执行恢复，不能仅凭“又试了一次”断言进行了梯度学习。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方项目页「Auto Reset / Pin Insertion」，真机复位演示；<a href="https://research.nvidia.com/labs/gear/enpire/videos/pin-reset-only-1.mp4" rel="noopener noreferrer">原视频：初态 1</a>、<a href="https://research.nvidia.com/labs/gear/enpire/videos/pin-reset-only-3.mp4" rel="noopener noreferrer">原视频：初态 3</a>。本教程未裁剪、未重新编码，官网播放器默认 8×；此处可用 B 站控件调整速度。画面展示复位行为，不提供完整传感器阈值，也不独立证明所有初态都能复位。</p>
+<h3 id="奖励判定器本身从哪里来">奖励判定器本身从哪里来</h3>
+<p>论文附录 A.2 另用<strong>扎带穿扣／扣紧</strong>任务说明奖励设计，这与正文展示的<strong>剪扎带</strong>任务应分开。人类收集几分钟有成功／失败标签的样例，并规定精确率、召回率和延迟要求；Agent 通过提示词、裁剪、阈值和推理实现优化判定流程。文中还设置隔离的评估集，允许研究失败案例，但禁止用该集合训练或改变指标计算。<a href="https://arxiv.org/html/2606.19980v2#A1.SS2" rel="noopener noreferrer">附录 A.2</a></p>
+<p>这能确认有人准备并提供标签资料；具体由谁逐帧标注、标注一致性怎样审查、完整样本量是多少，没有充分交代。本文不将它描述为“全自动生成的真值”。由于失败案例会进入后续设计过程，隔离文件和禁止梯度训练也不足以自动证明完全没有对评估集的适应；是否另有最终未接触测试集，需要额外证据。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/926f1f5c985d7eacfe5f4ff325aa44d3a061b27bf0307584344108bf4fb9606c.png" alt="原论文图 4：扎带穿扣的双视角验证" loading="lazy"></button><figcaption>原论文图 4：扎带穿扣的双视角验证</figcaption></figure></p>
+<p>原论文图 4，PDF 第 5 页；原始 PNG。两个视角分别检查扎带头与带身的几何关系，再融合判定。作者报告这一奖励流程优化到 150 ms 延迟预算内；该数值属于这一验证例子，不代表全部感知、策略或控制环节都达到同样延迟。</p>
+<h4 id="看验证视频同一过程怎样从图像变成判定依据">看验证视频：同一过程怎样从图像变成判定依据</h4>
+<figure class="report-video"><div class="pb-video" data-part="3" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=3&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P3：真机扎带奖励检查 · 检测框视图"><img src="../assets/enpire/92867a58dec356601bf1de43e299d736d7c195790f459420acb32afabc3d0543.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P3</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=3" target="_blank" rel="noopener noreferrer">在B站打开 P3 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机扎带奖励检查 · 检测框视图</figcaption></figure>
+<figure class="report-video"><div class="pb-video" data-part="4" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=4&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P4：真机扎带奖励检查 · 分割掩码视图"><img src="../assets/enpire/73c041489480c925472a8ba912b5a46733d3d78ec94eb529a0254317d6882653.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P4</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=4" target="_blank" rel="noopener noreferrer">在B站打开 P4 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机扎带奖励检查 · 分割掩码视图</figcaption></figure>
+<p><strong>观看重点。</strong> 先看上下两个相机视角，再比较检测框与分割掩码：带身和扎带头的二维位置关系，如何为“有没有穿过”提供证据？这是扎带穿扣的奖励设计例子，不能把检测图层误当成剪扎带策略的训练标签。官网还用交互面板叠加两视角判定及最终结果；这里保留两条原始叠加视频，未重制那套逐帧交互读数。两个播放器独立控制，比较同一时刻时应将进度设到相同位置。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方「Reward Verification / Tie Zip-tie」，真机相机录像加检测／分割图层；<a href="https://research.nvidia.com/labs/gear/enpire/videos/ziptie-reward-bbox.mp4" rel="noopener noreferrer">检测框原视频</a>、<a href="https://research.nvidia.com/labs/gear/enpire/videos/ziptie-reward-seg.mp4" rel="noopener noreferrer">分割原视频</a>。保留原文件，默认 1×。可见掩码与边界框并不等于独立人工真值；精确率、召回率和延迟仍要依据有标签的评估协议。</p>
+<p>双视角几何判定希望减少假阳性，推理优化希望让反馈及时可用；两者是否达到要求，见<a href="#自动评分和复位怎样支撑可信的实验">奖励评估的目的与结果</a>。</p>
+<h3 id="用一次插销失败区分三层循环">用一次插销失败区分三层循环</h3>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/68b433d56053d0257d7d9f2f7fd9125d5eb254764a358aaa7688bdb9adfefbfc.svg" alt="教学重建：研究、参数学习和物理执行三层循环" loading="lazy"></button><figcaption>教学重建：研究、参数学习和物理执行三层循环</figcaption></figure></p>
+<p>图解：最上层决定“试什么方法”，中间层在需要时“用数据更新网络”，最下层负责“真正动起来并获得反馈”。三层可以交错运行，更新的对象却不同。一个机器人反复尝试，不代表它每次都更新了模型；一个 Agent 改好了代码，也不代表基础大模型的权重发生了变化。</p>
+<p><strong>教学重建。</strong> 机器人向下插入，销钉接触孔边，验证器仍返回未成功。此刻有三种完全不同的后续：</p>
+<ol>
+<li><strong>执行层恢复</strong>：固定程序根据当前观测抬起一点、重新对准再试。这一过程可以不改任何权重，也不改程序。</li>
+<li><strong>参数层学习</strong>：轨迹进入缓冲区，学习器更新 critic 和策略，使以后在相似观测下更倾向于合适动作。更新发生在批次优化时，不一定紧跟这一次动作。</li>
+<li><strong>研究层修改</strong>：Agent 发现多次尝试都在同一方向卡住，提出调整训练目标、数据混合或控制补偿的假设，改代码，再启动可比较的实验。</li>
+</ol>
+<p>例子说明的是接口关系，不是作者公开的一条完整逐步日志。论文图 12 确实记录了示范混合、BC 正则、批量大小和控制补偿等研究节点；某个具体失败如何触发某次修改，仍需原始研究记录才能完整归因。<a href="https://arxiv.org/html/2606.19980v2#A2.SS6" rel="noopener noreferrer">附录 B.6</a></p>
+<h4 id="看插销执行先认清画面里能看见哪一层">看插销执行：先认清画面里能看见哪一层</h4>
+<figure class="report-video"><div class="pb-video" data-part="5" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=5&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P5：真机插销执行 · 官方完整视频"><img src="../assets/enpire/17452a080fde019664ca88f954d64375509108678c51cc2f2df8ea6e153fc10d.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P5</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=5" target="_blank" rel="noopener noreferrer">在B站打开 P5 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机插销执行 · 官方完整视频</figcaption></figure>
+<p><strong>观看重点。</strong> 跟随夹爪进入孔口、接触、离开以及下一轮动作，把这些可见行为放回“执行—验证—复位”链条。观看时先浏览完整周期，再用播放器速度控件慢看接触附近的调整。若出现再次尝试，先判断是否只是执行层恢复；视频没有同时展示 learner 的参数写入或 Agent 的代码差异，不能凭动作变化认定另两层更新已经发生。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方「Learned Policies / Pin Insertion」<a href="https://research.nvidia.com/labs/gear/enpire/videos/pin-success.mp4" rel="noopener noreferrer">原视频</a>，真机执行。项目页将该展示组介绍为未经剪辑的五分钟 rollout；但本次下载的插销文件时间轴约为 6 分 53 秒。两者不完全一致，本文保留原文件，官网播放器默认 8×；此处可用 B 站控件调整速度，不把该介绍当成每个文件的精确时长。画面帮助理解动作过程，成功率与 pass@8 仍按后面的实验协议解读，不用演示中的可见成功次数替代统计。</p>
+<h2 id="训练数据流">训练数据流</h2>
+<p><strong>神经策略路线：原始轨迹 → 完整性与时间对齐 → 来源分流／预处理 → 训练批次 → BC 或 RL 目标 → 参数更新 → 发布并复验。</strong> 这里跟随一条插销轨迹，不把不同论文实验的配置合并成一个虚构的统一训练配方。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/1d25ff062545cb4699923f580d5d569df42735052ba922ed090f5117c4055767.svg" alt="教学重建：插销轨迹进入学习器的数据路径" loading="lazy"></button><figcaption>教学重建：插销轨迹进入学习器的数据路径</figcaption></figure></p>
+<ol>
+<li><strong>部署层记录一次交互。</strong> 输入是传感器观测、实际使用的动作和环境结果，输出是逐步状态张量、同步相机视频、动作来源与奖励等记录。图像、状态和动作是已记录量；成功信号是验证器自动产生的量。论文提到来源包含 RL、人工及手动控制，不应把所有轨迹叫作无人干预数据。记录按交互步骤推进，轨迹按 episode 归档。<a href="https://arxiv.org/html/2606.19980v2#A2.SS5" rel="noopener noreferrer">附录 B.5</a></li>
+<li><strong>轨迹完成后进入可读取状态。</strong> 后台读取器检查文件和数据，再转换为训练转移。公开代码处理了奖励延迟：若成功对应过去的一帧，相关路径会把奖励和终止对齐到被评分的时刻，并裁掉后续帧，而不是把晚收到的成功消息随意记在最新动作上。该机制是公开实现中的通用异步奖励路径，不能自动认为论文每项任务都使用了它。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/rl/auto_reward.py" rel="noopener noreferrer">异步奖励实现</a></li>
+<li><strong>按动作来源分流，再做表示转换。</strong> 论文的典型路由是 RL 动作进在线回放区，人工／手动动作进示范区。代码按逐步来源标签路由，并有严格检查和配置开关。来源标签回答“谁做了这个动作”，奖励回答“结果是否成功”；这是两条不同的信息。预处理还会选择相机和本体状态、变换动作尺度；舍弃的观测不再直接供网络使用。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/disk_buffer_ingestor.py" rel="noopener noreferrer">读取器</a></li>
+<li><strong>学习器抽取批次。</strong> 公开训练入口在开始采样时已有示范数据的情况下，构建在线与示范各占一半的批次；没有示范时使用在线数据。插销配置给出的批量大小是 1024，因此这一配置分支可对应 512 条在线转移加 512 条示范转移。这里的分母是训练样本条数，不是成功 episode 的比例；原论文每次搜索运行的混合比例仍需各自配置。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/train.py" rel="noopener noreferrer">训练入口</a></li>
+<li><strong>根据选定路线计算损失并更新。</strong> BC 使用记录动作作为模仿目标；RL 使用记录的奖励、下一观测以及模型估计的价值构造更新目标。公开插销配置冻结视觉编码器，策略、critic 及可训练投影的具体更新取决于训练路线。BC 路径更新 actor，critic 与温度不更新；RL 路径分别更新这些网络。没有证据表明编码大模型因这次训练而更新权重。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/vendor/serl_launcher/serl_launcher/agents/continuous/sac_mini.py" rel="noopener noreferrer">SACMini 实现</a></li>
+<li><strong>发布候选策略，回到真实环境验证。</strong> 学习器周期性发布网络参数，actor 进程接收；图像编码、动作推理与环境执行继续发生。损失下降只说明训练目标改善，候选策略还要用固定评分条件重新运行。实验结果交给研究外循环决定保留什么。参数同步节拍按训练步配置，不等同于机器人控制频率。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/train.py" rel="noopener noreferrer">训练入口</a></li>
+</ol>
+<p><strong>程序策略路线</strong>则是：轨迹、视频和结果 → Agent 诊断 → 修改程序／参数 → 固定环境重跑 → 保留或放弃修改。这里也能发生学习意义上的能力改进，但可以完全没有梯度、critic 和策略网络。报告中的“训练数据流”必须容纳这条分支，而不能给它强行套上 RL 损失。</p>
+<h2 id="推理数据流">推理数据流</h2>
+<p><strong>一次执行：当前观测 → 策略输出／程序调用 → 动作转换与控制 → 物理响应 → 固定验证器 → 继续、恢复或终止。</strong> 神经策略在运行时不需要未来成功标签；那些标签是在动作发生后产生，再用于评分或后续训练。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/228c4fe3bbd7d338ed9399ae7af152e47d75ec2bc777bd74751f8228ede32dee.svg" alt="教学重建：策略输出、控制与物理核验" loading="lazy"></button><figcaption>教学重建：策略输出、控制与物理核验</figcaption></figure></p>
+<ol>
+<li><strong>复位程序建立并检查起点。</strong> 对插销，准备到合适的持物与悬停状态。输入是场景及机器人状态，输出是可开始学习阶段的初始观测。由固定环境负责，每个新 episode 开始时执行；复位失败不能冒充一次正常策略试验。<a href="https://arxiv.org/html/2606.19980v2#S2.SS1" rel="noopener noreferrer">论文 §2.1、图 9</a></li>
+<li><strong>部署层提供当前观测。</strong> 论文平台包含顶部及双腕相机，策略使用视觉与本体状态；拥有三台相机不意味着某个策略吃进全部图像。公开插销配置选择右腕图像，以及右臂高度、旋转表示和夹爪状态；通用远程环境配置把模型图像尺寸设为 256×256。该选择舍弃了部分场景和状态信息，不能把网络理解为直接读取完整三维真值。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/configs/experiment/pin_insertion_delta_eef.yaml" rel="noopener noreferrer">插销配置</a></li>
+<li><strong>actor 进程运行策略网络。</strong> 这一公开配置输出右臂末端的三个归一化位置增量，随后裁剪、缩放。算法动作是三维；发送给远程环境的格式补入固定旋转与夹爪，成为十维表示。补出的维度不是策略又学会了七个控制自由度。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/configs/task/remote_yam_right_pos3.yaml" rel="noopener noreferrer">右臂配置</a></li>
+<li><strong>桥接层把动作交给机器人控制。</strong> 公开实现可把单个动作重复封装为带执行长度的数组。这不是网络预测了彼此不同的未来动作序列。控制系统还需要把末端目标落实到关节目标；论文没有完整给出该插销路线的 IK、插值与每层调度对应关系，这条边标为 <code>UNKNOWN_FROM_PAPER</code>。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/vendor/serl_launcher/serl_launcher/env/remote_deployment_env.py" rel="noopener noreferrer">动作桥接实现</a></li>
+<li><strong>低层控制驱动真实关节。</strong> 论文报告策略频率 30 Hz、CAN 上的关节控制频率 100 Hz；六个臂关节用 PD 加重力补偿，夹爪使用限力矩的柔顺夹持。目标到达与否受动力学、接触和延迟影响。30 Hz 与 100 Hz 是论文平台描述，不能从代码默认打包长度倒推出某条实验的实际推理频率。<a href="https://arxiv.org/html/2606.19980v2#A2.SS2" rel="noopener noreferrer">附录 B.2–B.4</a></li>
+<li><strong>验证器与状态机决定下一步。</strong> 新图像、深度相关状态与接触信息用于判定；未成功可以继续动作或恢复，成功、超时或越界则按规则结束并复位。运行期间也可以保存轨迹供后续研究，但恢复动作本身不要求 Agent 再写代码或 learner 当场更新权重。每种失败的完整重试上限、时间预算与分支细节，应以具体任务规则为准，未披露部分不补猜。</li>
+</ol>
+<h3 id="把三维动作换成可理解的距离">把三维动作换成可理解的距离</h3>
+<p><strong>代码事实加教学算例。</strong> 插销配置给三轴增量的尺度分别是 0.3、0.3、0.6 毫米。下面假设策略在某个决策时刻输出 0.5、−0.2、−1；裁剪后不变，换算得到向三个坐标方向分别移动 0.15、−0.06、−0.60 毫米的增量请求。</p>
+<div class="equation" aria-label="\begin{aligned}
+\mathbf{c}&amp;=(0.3,\,0.3,\,0.6)\ \text{mm} \\
+\Delta \mathbf{p}_t &amp;=\mathbf{c}\odot\operatorname{clip}(\mathbf{u}_t,-1,1)
+\end{aligned}"><math display="block" class="tml-display" style="display:block math;"><mtable displaystyle="true" class="tml-jot"><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mi>𝐜</mi></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0.3</mn><mo separator="true">,</mo><mspace width="0.1667em"></mspace><mn>0.3</mn><mo separator="true">,</mo><mspace width="0.1667em"></mspace><mn>0.6</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mtext> </mtext><mtext>mm</mtext></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow><mrow><mi mathvariant="normal">Δ</mi><mspace></mspace></mrow><msub><mi>𝐩</mi><mi>t</mi></msub></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mi>𝐜</mi><mo>⊙</mo><mi>clip</mi><mo>⁡</mo><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>𝐮</mi><mi>t</mi></msub><mo separator="true">,</mo><mo form="prefix" stretchy="false">−</mo><mn>1,1</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></mtd></mtr></mtable></math></div>
+<div class="equation" aria-label="\begin{aligned}
+\mathbf{u}_t&amp;=(0.5,-0.2,-1) \\
+\Delta\mathbf{p}_t&amp;=(0.15,-0.06,-0.60)\ \text{mm}
+\end{aligned}"><math display="block" class="tml-display" style="display:block math;"><mtable displaystyle="true" class="tml-jot"><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><msub><mi>𝐮</mi><mi>t</mi></msub></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0.5</mn><mo separator="true">,</mo><mo form="prefix" stretchy="false">−</mo><mn>0.2</mn><mo separator="true">,</mo><mo form="prefix" stretchy="false">−</mo><mn>1</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow><mrow><mi mathvariant="normal">Δ</mi><mspace></mspace></mrow><msub><mi>𝐩</mi><mi>t</mi></msub></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0.15</mn><mo separator="true">,</mo><mo form="prefix" stretchy="false">−</mo><mn>0.06</mn><mo separator="true">,</mo><mo form="prefix" stretchy="false">−</mo><mn>0.60</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mtext> </mtext><mtext>mm</mtext></mrow></mtd></mtr></mtable></math></div>
+<p>u 是网络输出的无量纲动作，c 是每轴尺度，圆点乘号表示逐轴相乘；增量是动作转换层产生的物理请求，t 表示当前决策时刻。它不是测得的实际位移，也不是速度或扭矩。坐标系和相对目标的累积方式仍需核对机器人侧完整配置，不能仅凭三维向量断言“世界坐标向下”。</p>
+<h2 id="流程图">流程图</h2>
+<figure class="flowchart"><div class="mermaid" aria-label="流程图">flowchart TD
+  subgraph S[环境设置阶段]
+    H[人类任务要求与反馈] --&gt; EN[构建并验证复位 判定与约束]
+  end
+  subgraph R[运行阶段]
+    EN --&gt; O[复位后观测与任务]
+    O --&gt; P[程序策略或神经策略]
+    P --&gt; C[动作桥接与控制]
+    C --&gt; W[机器人和环境响应]
+    W --&gt; V[固定判定与执行记录]
+    V --&gt;|继续或恢复| O
+  end
+  subgraph T[研究与训练阶段]
+    V --&gt; D[轨迹 视频与来源标签]
+    D --&gt; A[编码 Agent 诊断并提出假设]
+    A --&gt; K[修改程序或训练方案]
+    D --&gt; L[BC 或 RL 学习器]
+    K --&gt; L
+    K --&gt;|程序路线| P
+    L --&gt;|策略参数| P
+  end</div><details><summary>查看流程图源码</summary><pre><code class="language-mermaid">flowchart TD
+  subgraph S[环境设置阶段]
+    H[人类任务要求与反馈] --&gt; EN[构建并验证复位 判定与约束]
+  end
+  subgraph R[运行阶段]
+    EN --&gt; O[复位后观测与任务]
+    O --&gt; P[程序策略或神经策略]
+    P --&gt; C[动作桥接与控制]
+    C --&gt; W[机器人和环境响应]
+    W --&gt; V[固定判定与执行记录]
+    V --&gt;|继续或恢复| O
+  end
+  subgraph T[研究与训练阶段]
+    V --&gt; D[轨迹 视频与来源标签]
+    D --&gt; A[编码 Agent 诊断并提出假设]
+    A --&gt; K[修改程序或训练方案]
+    D --&gt; L[BC 或 RL 学习器]
+    K --&gt; L
+    K --&gt;|程序路线| P
+    L --&gt;|策略参数| P
+  end</code></pre></details></figure>
+<p>图中有 11 个节点。进入第二阶段后，Agent 可以改变程序和训练方案，但复位、判定及约束保持固定。训练阶段能用完成后的轨迹和奖励；策略执行时只使用当时可得的观测与参数。控制接口的未披露细节见“推理数据流”。点击“放大流程图”或正文图片后，可继续放大并滚动查看细节。</p>
+<h2 id="两类改进路线程序bc-与-rl-分别怎样学">两类改进路线：程序、BC 与 RL 分别怎样学</h2>
+<h3 id="程序搜索改的是可执行决策规则">程序搜索：改的是可执行决策规则</h3>
+<p>程序可以组织“定位目标 → 选择接触位置 → 调用规划器 → 观察结果 → 调整后再试”。在 Push-T 上，Agent 通过合成感知与控制工具调用探索启发式策略。每次候选程序完成实验，Agent 读取轨迹和分数，再修改动作规则、阈值或调用顺序。<a href="https://arxiv.org/html/2606.19980v2#S3.SS1" rel="noopener noreferrer">论文 §3.1</a></p>
+<p><strong>教学重建。</strong> 如果 T 形物体只移动却不旋转，程序可能需要换接触点，而不是增加下压力。要确认这个解释，需要接触位置、轨迹与目标姿态的证据；如果只给“失败”一个比特，Agent 很难区分定位错了和接触策略错了。细粒度日志因而影响研究效率。</p>
+<p>这一分支的监督是实验结果与诊断证据，更新由编码 Agent 生成的代码完成。它没有必须存在的反向传播损失；E 模块的“演化”也不应被默认画成论文未给出的固定种群算法或中心调度器。</p>
+<figure class="report-video"><div class="pb-video" data-part="6" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=6&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P6：真机 Push-T 执行 · 对照程序策略的数据流"><img src="../assets/enpire/dcf49b12cfff3d6728a13d1145350be83df6c4bd91d5c17c270c0a3fd7da8d7c.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P6</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=6" target="_blank" rel="noopener noreferrer">在B站打开 P6 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机 Push-T 执行 · 对照程序策略的数据流</figcaption></figure>
+<p><strong>观看重点。</strong> 看推动方向和接触位置如何随 T 形块的姿态变化，再回想程序路线的“观察—定位—规划—执行—重看”。这是本文主线插销之外的补充任务，帮助理解工具调用如何落到物体运动。官网另有可切换初态与 Agent 的 Push-T 轨迹交互；本教程选择可离线播放的执行视频，并未把该交互的所有分支复制进来。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方展示组中的 <a href="https://research.nvidia.com/labs/gear/enpire/videos/pusht-success.mp4" rel="noopener noreferrer">Push-T 原视频</a>，真机，原文件、官网播放器默认 8×；此处可用 B 站控件调整速度。视频没有逐条显示工具 API 和策略版本；程序路线的归属与算法细节依据论文方法说明，不能从一段运动反推具体源码。</p>
+<p>程序搜索的主张还需过真实接触这一关。后面的<a href="#能在仿真里改好程序就能在真机上成功吗">仿真与真机比较</a>检验这种路线在哪里有效、在哪里遇到困难；<a href="#让-agent-直接看图能更快找到有效程序吗">视觉接口消融</a>进一步检查诊断信息怎样影响研究。</p>
+<h3 id="bc先学会像已有有效动作那样做">BC：先学会像已有有效动作那样做</h3>
+<p>行为克隆解决的是：给定类似观测，策略能否输出记录中的动作。来源可以是人类示范，也可以是筛选后的策略轨迹；具体由什么筛选得到，要看实验。在线收集再加入模仿数据，可形成迭代 BC，但“把失败动作不加区分地全部模仿”并不是自然得到的改进规则。</p>
+<p>公开实现中的 BC 使用动作的负对数似然：让记录动作在策略分布下变得更可能。</p>
+<div class="equation" aria-label="\begin{aligned}
+\mathcal{L}_{\mathrm{BC}}(\theta)
+&amp;=-\mathbb{E}_{(o,a^{\mathrm{data}})\sim\mathcal{D}} \\
+&amp;\qquad\left[\log\pi_\theta(a^{\mathrm{data}}\mid o)\right]
+\end{aligned}"><math display="block" class="tml-display" style="display:block math;"><mtable displaystyle="true" class="tml-jot"><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow><msub><mi class="mathcal">ℒ</mi><mpadded lspace="0"><mi>BC</mi></mpadded></msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mi>θ</mi><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mo form="prefix" stretchy="false">−</mo><msub><mi>𝔼</mi><mrow><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mi>o</mi><mo separator="true">,</mo><msup><mi>a</mi><mpadded lspace="0"><mi>data</mi></mpadded></msup><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo>∼</mo><mi class="mathcal">𝒟</mi></mrow></msub></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mspace width="2em"></mspace><mrow><mo fence="true" form="prefix" stretchy="true">[</mo><mrow><mi>log</mi><mo>⁡</mo><mspace width="0.1667em"></mspace></mrow><msub><mi>π</mi><mi>θ</mi></msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msup><mi>a</mi><mpadded lspace="0"><mi>data</mi></mpadded></msup><mo lspace="0.22em" rspace="0.22em" stretchy="false">|</mo><mi>o</mi><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo fence="true" form="postfix" stretchy="true">]</mo></mrow></mrow></mtd></mtr></mtable></math></div>
+<p>这里 o 和数据动作来自记录，数据集是选定的训练样本；θ 是正在更新的策略参数。对连续动作，策略给出的是概率密度，不能把密度值直接理解为某个离散动作的成功概率。该目标不需要知道未来奖励，也不需要 critic；数据质量、覆盖范围与动作尺度却直接影响它学到的行为。代码将接近动作裁剪边界的标签略微收回，以使分布的对数密度可计算。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/vendor/serl_launcher/serl_launcher/agents/continuous/sac_mini.py" rel="noopener noreferrer">SACMini 的 BC 路径</a></p>
+<p>插销中，示范可以提供“靠近孔后如何小幅修正”的起点。若部署中出现示范没覆盖的偏移，策略可能仍失败；这说明仅优化模仿损失不保证恢复能力。ENPIRE 的研究外循环可以尝试增加相关数据、修改表示，或转向利用结果反馈的 RL。</p>
+<h3 id="在线离线离线转在线区别在数据何时进入">在线、离线、离线转在线：区别在数据何时进入</h3>
+<table>
+<thead>
+<tr>
+<th>路线</th>
+<th>数据来自哪里</th>
+<th>本轮训练时是否继续与机器人交互</th>
+<th>主要限制</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>离线 RL</td>
+<td>已有且本轮固定的轨迹</td>
+<td>不需要新增交互</td>
+<td>没有覆盖的动作结果难以从数据中可靠估计</td>
+</tr>
+<tr>
+<td>在线 RL</td>
+<td>当前策略持续产生的轨迹，可混入已有示范</td>
+<td>会继续采集</td>
+<td>真机试验慢；探索受安全和复位能力约束</td>
+</tr>
+<tr>
+<td>离线转在线 RL</td>
+<td>先使用已有数据，再接入新的真实反馈</td>
+<td>后半段继续采集</td>
+<td>两阶段数据分布、尺度和更新方式必须衔接</td>
+</tr>
+<tr>
+<td>迭代 BC</td>
+<td>初始动作数据，加上后续采集并选定的动作数据</td>
+<td>数据可分轮新增</td>
+<td>数据聚合和保留规则决定是否学到错误行为</td>
+</tr>
+</tbody></table>
+<p>论文 §3.2 报告 Agent 探索了这些路线并调整批量大小、actor／critic 更新比例和 BC 项权重。它给出的是研究空间及实验过程，不是为所有任务指定唯一算法。<a href="https://arxiv.org/html/2606.19980v2#S3.SS2" rel="noopener noreferrer">论文 §3.2</a></p>
+<h3 id="rl奖励只告诉结果价值学习把结果传回此前动作">RL：奖励只告诉结果，价值学习把结果传回此前动作</h3>
+<p>插入成功时才得到正奖励，之前的小幅修正怎样获得学习信号？第一步是把一次动作的前后观测与结果组成转移记录：</p>
+<div class="equation" aria-label="(o_t,\ a_t,\ r_t,\ o_{t+1},\ m_t)"><math display="block" class="tml-display" style="display:block math;"><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>o</mi><mi>t</mi></msub><mo separator="true">,</mo><mtext> </mtext><msub><mi>a</mi><mi>t</mi></msub><mo separator="true">,</mo><mtext> </mtext><msub><mi>r</mi><mi>t</mi></msub><mo separator="true">,</mo><mtext> </mtext><msub><mi>o</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><mtext> </mtext><msub><mi>m</mi><mi>t</mi></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></math></div>
+<p>观测、动作与奖励来自轨迹，m 是是否继续自举的掩码。critic 输入当前观测和动作，估计继续按策略行动时的预期回报。它的输出是训练出来的预测；验证器输出则是对实际结果的检查。critic 再自信，也不能替代物理核验。</p>
+<p>公开 SACMini 路径采用目标 critic 构造 TD 目标。下面对应关闭熵回传的配置分支：</p>
+<div class="equation" aria-label="\begin{aligned}
+a_{t+1}&amp;\sim\pi_\theta(\cdot\mid o_{t+1}) \\
+y_t&amp;=r_t+\gamma m_t\min_j Q_{\bar\phi,j}(o_{t+1},a_{t+1})
+\end{aligned}"><math display="block" class="tml-display" style="display:block math;"><mtable displaystyle="true" class="tml-jot"><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><msub><mi>a</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>∼</mo><msub><mi>π</mi><mi>θ</mi></msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mo form="prefix" stretchy="false">⋅</mo><mo lspace="0.22em" rspace="0.22em" stretchy="false">|</mo><msub><mi>o</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><msub><mi>y</mi><mi>t</mi></msub></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><msub><mi>m</mi><mi>t</mi></msub><munder><mi>min</mi><mi>j</mi></munder><mo>⁡</mo><mspace width="0.1667em"></mspace><msub><mi>Q</mi><mrow><mover><mi>ϕ</mi><mo stretchy="false" class="wbk-acc" style="math-depth:0;">‾</mo></mover><mo separator="true">,</mo><mi>j</mi></mrow></msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>o</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mi>a</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></mtd></mtr></mtable></math></div>
+<div class="equation" aria-label="\mathcal{L}_{Q}(\phi)=
+\mathbb{E}_{t,j}\left[(Q_{\phi,j}(o_t,a_t)-y_t)^2\right]"><math display="block" class="tml-display" style="display:block math;"><mrow><msub><mi class="mathcal">ℒ</mi><mi>Q</mi></msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mi>ϕ</mi><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo>=</mo><msub><mi>𝔼</mi><mrow><mi>t</mi><mo separator="true">,</mo><mi>j</mi></mrow></msub><mrow><mo fence="true" form="prefix" stretchy="true">[</mo><msup><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>Q</mi><mrow><mi>ϕ</mi><mo separator="true">,</mo><mi>j</mi></mrow></msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>o</mi><mi>t</mi></msub><mo separator="true">,</mo><msub><mi>a</mi><mi>t</mi></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo>−</mo><msub><mi>y</mi><mi>t</mi></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mn>2</mn></msup><mo fence="true" form="postfix" stretchy="true">]</mo></mrow></mrow></math></div>
+<p>γ 是折扣系数；φ 是待更新 critic 的参数，带横线的参数来自缓慢跟随的目标网络，j 表示 critic 集合中的成员。当前奖励和下一观测已被记录；下一动作由当前策略采样，后续价值由目标网络估计。TD 目标在下一观测可得时即可构造，不要求真的观察直到 episode 最终结束；磁盘读取实现仍可能等待整个 episode 完整写入。</p>
+<p>终止边界必须显式处理。m 为 0 时，目标只剩当前奖励。公开 actor 的在线转移路径把 terminated 或 truncated 都作为边界关掉自举；不能因此宣称所有离线读取路径或论文的所有训练方案都采用完全相同的截断规则。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/train.py" rel="noopener noreferrer">训练入口与 SACMini</a></p>
+<p><strong>教学算例，不是论文实测。</strong> 假设一条三步轨迹前两步没有奖励，第三步成功并终止，折扣取 0.99。完整轨迹结束后，可计算实际折扣回报：</p>
+<div class="equation" aria-label="\begin{aligned}
+(r_0,r_1,r_2)&amp;=(0,0,1) \\
+G_t&amp;=\sum_{k=t}^{2}\gamma^{k-t}r_k
+\end{aligned}"><math display="block" class="tml-display" style="display:block math;"><mtable displaystyle="true" class="tml-jot"><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>r</mi><mn>0</mn></msub><mo separator="true">,</mo><msub><mi>r</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>r</mi><mn>2</mn></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0,0,1</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><msub><mi>G</mi><mi>t</mi></msub></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mrow><munderover><mo movablelimits="false">∑</mo><mrow><mi>k</mi><mo>=</mo><mi>t</mi></mrow><mn>2</mn></munderover></mrow><msup><mi>γ</mi><mrow><mi>k</mi><mo>−</mo><mi>t</mi></mrow></msup><msub><mi>r</mi><mi>k</mi></msub></mrow></mtd></mtr></mtable></math></div>
+<div class="equation" aria-label="(G_0,G_1,G_2)=(0.9801,0.99,1)"><math display="block" class="tml-display" style="display:block math;"><mrow><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><msub><mi>G</mi><mn>0</mn></msub><mo separator="true">,</mo><msub><mi>G</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>G</mi><mn>2</mn></msub><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo>=</mo><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0.9801,0.99,1</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow></mrow></math></div>
+<p>这些是“后来真的发生了什么”的回报。当前代码配置关闭了 Monte Carlo return 目标，因此此处 G 仅用于说明稀疏成功信号的时间含义，不能把它写成这条默认更新实际采用的监督。</p>
+<p>再看一个 TD 更新：若当前步奖励为 0、尚未终止，目标 critic 对下一动作的两个估计分别为 0.4 与 0.6，则采用较小值后，目标为 0.396。假设当前 critic 估计为 0.2，其单项平方误差约为 0.0384。</p>
+<div class="equation" aria-label="y_t=0+0.99\times1\times\min(0.4,0.6)=0.396"><math display="block" class="tml-display" style="display:block math;"><mrow><msub><mi>y</mi><mi>t</mi></msub><mo>=</mo><mn>0</mn><mo>+</mo><mn>0.99</mn><mo>×</mo><mn>1</mn><mo>×</mo><mrow><mi>min</mi><mo>⁡</mo></mrow><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0.4,0.6</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo>=</mo><mn>0.396</mn></mrow></math></div>
+<div class="equation" aria-label="(0.2-0.396)^2=0.038416"><math display="block" class="tml-display" style="display:block math;"><mrow><msup><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>0.2</mn><mo>−</mo><mn>0.396</mn><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mn>2</mn></msup><mo>=</mo><mn>0.038416</mn></mrow></math></div>
+<p>学习器通过降低该误差，让当前动作的价值估计更接近目标。多次采样和更新逐步传播成功信息。所有小数均为教学构造，不能解读为论文 critic 的真实预测或校准后的成功概率。</p>
+<h3 id="策略如何利用-critic又为什么会加入-bc-约束">策略如何利用 critic，又为什么会加入 BC 约束</h3>
+<p>critic 学会评分后，策略可尝试输出评分更高的动作。公开 SACMini 的策略目标还保留熵项，鼓励一定的动作分布宽度；其策略损失可概括如下：</p>
+<div class="equation" aria-label="\begin{aligned}
+\overline Q_\phi(o,a)&amp;=\frac{1}{M}\sum_{j=1}^{M}Q_{\phi,j}(o,a) \\
+\mathcal{L}_{\mathrm{actor}}(\theta)
+&amp;=\mathbb{E}_{o,a\sim\pi_\theta}\big[\alpha\log\pi_\theta(a\mid o) \\
+&amp;\qquad\qquad-\overline Q_\phi(o,a)\big]
+\end{aligned}"><math display="block" class="tml-display" style="display:block math;"><mtable displaystyle="true" class="tml-jot"><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow><msub><menclose notation="top" class="tml-overline"><mi>Q</mi></menclose><mi>ϕ</mi></msub><mo form="prefix" stretchy="false">(</mo><mi>o</mi><mo separator="true">,</mo><mi>a</mi><mo form="postfix" stretchy="false">)</mo></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><mfrac><mn>1</mn><mi>M</mi></mfrac><mrow><munderover><mo movablelimits="false">∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>M</mi></munderover></mrow><msub><mi>Q</mi><mrow><mi>ϕ</mi><mo separator="true">,</mo><mi>j</mi></mrow></msub><mo form="prefix" stretchy="false">(</mo><mi>o</mi><mo separator="true">,</mo><mi>a</mi><mo form="postfix" stretchy="false">)</mo></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow><msub><mi class="mathcal">ℒ</mi><mpadded lspace="0"><mi>actor</mi></mpadded></msub><mo form="prefix" stretchy="false">(</mo><mi>θ</mi><mo form="postfix" stretchy="false">)</mo></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mo>=</mo><msub><mi>𝔼</mi><mrow><mi>o</mi><mo separator="true">,</mo><mi>a</mi><mo>∼</mo><msub><mi>π</mi><mi>θ</mi></msub></mrow></msub><mo fence="false" symmetric="true" minsize="1.2em" maxsize="1.2em">[</mo><mi>α</mi><mrow><mspace width="0.1667em"></mspace><mi>log</mi><mo>⁡</mo><mspace width="0.1667em"></mspace></mrow><msub><mi>π</mi><mi>θ</mi></msub><mo form="prefix" stretchy="false">(</mo><mi>a</mi><mo lspace="0.22em" rspace="0.22em" stretchy="false">|</mo><mi>o</mi><mo form="postfix" stretchy="false">)</mo></mrow></mtd></mtr><mtr><mtd class="tml-right" style="padding-left:0em;padding-right:0em;"><mrow></mrow></mtd><mtd class="tml-left" style="padding-left:0em;padding-right:0em;"><mrow><mspace width="2em"></mspace><mspace width="2em"></mspace><mo>−</mo><msub><menclose notation="top" class="tml-overline"><mi>Q</mi></menclose><mi>ϕ</mi></msub><mo form="prefix" stretchy="false">(</mo><mi>o</mi><mo separator="true">,</mo><mi>a</mi><mo form="postfix" stretchy="false">)</mo><mo fence="false" symmetric="true" minsize="1.2em" maxsize="1.2em">]</mo></mrow></mtd></mtr></mtable></math></div>
+<p>α 是熵权重，由温度相关更新调节；M 是 critic 数量，Q 上的横线表示各成员的平均。这里使用的是 critic 平均值，而上面的目标回传使用最小值，这是公开代码里的具体区别。策略更新利用 critic 对动作的估计，仍需真实 rollout 验证，尤其要防范在数据覆盖不足处“利用了错误高分”。</p>
+<p>BC 正则的直觉是：向高价值动作改进时，也保留靠近已有有效动作的倾向。论文报告搜索到的 BC 正则节点带来了进展。下面只是<strong>机制层面的教学示意</strong>，不是作者公布的完整实验损失：</p>
+<div class="equation" aria-label="\mathcal{L}_{\mathrm{hybrid}}
+=\mathcal{L}_{\mathrm{RL}}+\lambda\mathcal{L}_{\mathrm{BC}}"><math display="block" class="tml-display" style="display:block math;"><mrow><msub><mi class="mathcal">ℒ</mi><mpadded lspace="0"><mi>hybrid</mi></mpadded></msub><mo>=</mo><msub><mi class="mathcal">ℒ</mi><mpadded lspace="0"><mi>RL</mi></mpadded></msub><mo>+</mo><mi>λ</mi><msub><mi class="mathcal">ℒ</mi><mpadded lspace="0"><mi>BC</mi></mpadded></msub></mrow></math></div>
+<p>λ 决定模仿约束的强弱。过强可能限制适应，过弱可能丢掉有效行为；应通过同一环境中的实验选择。公开快照提供单独的 BC 更新和 SACMini 更新，但其默认 RL 策略损失未直接加上上述 BC 项；因此论文中的“BC 正则实验”与当前默认路径应分别描述，不能仅因有 demo buffer 就断言启用了 BC 正则。</p>
+<p><strong>这条奖励链的终点是什么？</strong> 对已核查的 SACMini 路线，是环境结果 → 奖励 → TD 目标 → Q 估计 → actor 更新。没有必要补入 PPO 的 GAE、优势排序或二元条件标签；这些不是本文核查到的默认更新步骤。训练批次中“示范占一半”也不代表“一半 episode 成功”。</p>
+<p>这些训练机制让 Agent 有更多可尝试的修改，但“有这个选项”不等于“它带来了独立收益”。后面的<a href="#让-agent-修改训练方案插销策略真的会变好吗">插销研究实验</a>区分整段研究的进步、具体方案节点和仍缺少的受控消融。</p>
+<h3 id="频率数据延迟和权重同步为什么不能混在一起">频率、数据延迟和权重同步为什么不能混在一起</h3>
+<table>
+<thead>
+<tr>
+<th>环节</th>
+<th>论文或代码中的时间含义</th>
+<th>可以得出的结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>机器人策略与关节控制</td>
+<td>论文报告 30 Hz 与 100 Hz</td>
+<td>策略决策和低层跟踪是不同频率；未披露的插值与调度不能补猜</td>
+</tr>
+<tr>
+<td>轨迹入库</td>
+<td>插销配置的扫描间隔为 5 秒，读取还等待完整数据</td>
+<td>一次新动作不必马上进入下一训练批次</td>
+</tr>
+<tr>
+<td>梯度更新</td>
+<td>学习器按批次推进，可多次使用旧数据</td>
+<td>训练步数不等于机器人动作步数</td>
+</tr>
+<tr>
+<td>权重发布</td>
+<td>被核查的基础配置每 50 个训练步发布；实验可覆盖</td>
+<td>actor 的参数更新周期不是固定 50 个控制周期</td>
+</tr>
+<tr>
+<td>编码 Agent 修改方案</td>
+<td>按诊断与试验异步推进，无统一固定频率</td>
+<td>它不必每 33 毫秒重新规划一遍研究</td>
+</tr>
+</tbody></table>
+<p>数据、权重、命令三者需要分别记录版本和时间。否则，看到一次成功也可能无法判断它属于哪个代码方案、哪个策略检查点，或者是否混入人工控制。公开研究合同因此强调保留假设、修改、提交、配置、数据与结果。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/autoresearch_instruction.md" rel="noopener noreferrer">研究合同</a></p>
+<h2 id="多机器人研究经验保存与-vla-组合">多机器人研究、经验保存与 VLA 组合</h2>
+<h3 id="八台机器人加速的是哪一种工作">八台机器人加速的是哪一种工作</h3>
+<p>论文的车队是八个硬件相同的双臂 YAM 工作站，每站有机器人、相机、计算与编码 Agent。Agent 通过 Git 共享代码、配置、工具与结果，异步采用其他分支的好想法。它没有要求所有机器人每一步把状态上传到一个统一中央策略，再同步计算动作。<a href="https://arxiv.org/html/2606.19980v2#A2.SS1" rel="noopener noreferrer">附录 B.1</a></p>
+<p><strong>教学重建。</strong> 一个站点研究数据混合，另一个研究动作尺度，第三个研究控制补偿。某站找到更好的方案，其他站可以借用其修改并重新验证。这里的并行单位是“研究假设及其试验”。并行学习器或共享 replay 在工程上也可能有价值，但不是仅由上述 Git 协作方式就能证明的论文机制。</p>
+<figure class="report-video"><div class="pb-video" data-part="7" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=7&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P7：真机插销车队 · 多站点并行实验"><img src="../assets/enpire/a7428cd88a4e15c3c7d8ddfff8758106a4d2e53f7434686838e2bf88f855d8e7.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P7</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=7" target="_blank" rel="noopener noreferrer">在B站打开 P7 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机插销车队 · 多站点并行实验</figcaption></figure>
+<p><strong>观看重点。</strong> 同时看不同工作站：有的进行复位，有的执行插入，各站不必处在相同阶段。官网说明每台机器人对应一个自主研究编码 Agent，复位把销钉送到插入前姿态后，再开展在线 RL 研究。把画面中的“同时做实验”与论文中的“通过 Git 分享方案”分开；视频不显示每次提交、参数同步或经验采用的时刻。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方「Autoresearch Fleet」<a href="https://research.nvidia.com/labs/gear/enpire/videos/pin-fleet.mp4" rel="noopener noreferrer">插销车队原视频</a>，真机车队画面，原文件、官网播放器默认 8×；此处可用 B 站控件调整速度。官网播放器对车队画面有显示裁切，本教程以完整文件画幅呈现。并行运动能说明实验部署形态，墙钟加速和 token 成本仍需读图 7 的统计。</p>
+<p>并行研究希望更早找到可用策略；<a href="#多给几台机器人能更快且更省地找到策略吗">增加机器人数量的实验</a>会同时检查时间收益与资源代价，并区分更多试验和 Git 共享的贡献。</p>
+<h3 id="经验到底存在哪里能保留多久">经验到底存在哪里，能保留多久</h3>
+<table>
+<thead>
+<tr>
+<th>状态／经验</th>
+<th>存储与写入</th>
+<th>如何读取、保留范围</th>
+<th>丢失或不能证明的内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>当前执行状态</td>
+<td>观测、程序变量、执行状态机；随动作更新</td>
+<td>后续动作和重试使用；主要在当前 episode</td>
+<td>没有统一公开的长程语义记忆结构</td>
+</tr>
+<tr>
+<td>当次研究记录</td>
+<td>轨迹目录、视频、日志、代码、配置与检查点</td>
+<td>Agent 诊断；learner 抽样；本次研究会话可用</td>
+<td>Agent 未必同时读取全部原始帧；上下文截取策略不完全明确</td>
+</tr>
+<tr>
+<td>多站点研究成果</td>
+<td>Git 分支和提交</td>
+<td>各站点异步读取和采用</td>
+<td>代码传播不等于实时共享物理状态或集中训练</td>
+</tr>
+<tr>
+<td>神经策略能力</td>
+<td>模型参数，由优化器写入</td>
+<td>actor 在执行时读取</td>
+<td>参数改进不等于可解释的文字经验，也不证明长期任务记忆</td>
+</tr>
+<tr>
+<td>跨任务经验</td>
+<td>Agent 总结的 Markdown 文本</td>
+<td>新任务初始化时作为上下文</td>
+<td>原始轨迹、隐藏日志与检查点在该迁移设置中被清除</td>
+</tr>
+</tbody></table>
+<p>论文将插销研究总结传给 GPU 插入研究，明确说明迁移依靠文字摘要；新会话没有无边界继承此前所有数据。这支持“研究经验可作为上下文迁移”的机制，不能改写为“同一策略权重直接零样本掌握 GPU 插入”。摘要究竟保留了哪些失败、压缩掉哪些条件，需要具体文本才能核实。<a href="https://arxiv.org/html/2606.19980v2#S3.SS4" rel="noopener noreferrer">论文 §3.4、附录 B.1</a></p>
+<p><strong>工程判断。</strong> 检验经验迁移，最有区分力的对照是：相同新任务、资源与起始代码，分别提供真实摘要、无摘要及内容相近但无关的摘要；测量达到固定标准的时间与失败类型。要检验长期状态记忆，则还需要中断恢复、重复失败和部分可观测任务。这些是建议实验，不是本文已经完成的结果。</p>
+<p>文字摘要的目标是减少新任务的重复探索。<a href="#把文字经验交给新任务能少走弯路吗">经验迁移证据</a>将区分作者展示的迁移流程，与证明“少走弯路”仍需要的对照。</p>
+<h3 id="vla-在系统中的位置可以变化">VLA 在系统中的位置可以变化</h3>
+<p>论文在 RoboCasa 里让 Agent 组合 VLA 和程序工具：先通过检测与规划，让夹爪到达目标上方的悬停位置，再进入抓取等动作；作者还展示了将该思路用于真机剪扎带任务。<a href="https://arxiv.org/html/2606.19980v2#S3.SS5" rel="noopener noreferrer">论文 §3.5</a></p>
+<p>这意味着改进可以来自更好的调用时机、初始状态和模块组合。若 VLA 本体权重没有训练，整套系统成功率提高也不能归因成“VLA 权重变强”。同样，检测或规划失败时，后续 VLA 无法凭空保证补救；需要看哪一层真正发现错误并承担恢复。</p>
+<figure class="report-video"><div class="pb-video" data-part="8" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=8&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P8：真机剪扎带 · VLA 与程序工具组合的任务示例"><img src="../assets/enpire/a426687f38f99797352516ef6c336b135cdb5c5b739490fed7b5cad39b0b23cf.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P8</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=8" target="_blank" rel="noopener noreferrer">在B站打开 P8 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>真机剪扎带 · VLA 与程序工具组合的任务示例</figcaption></figure>
+<p><strong>观看重点。</strong> 看工具接近目标、调整位置和完成剪切时的接触过程，再对应“程序先改善目标附近的状态，VLA 接着完成动作”的机制。该片段用于展示论文所讨论的真机任务；它不是模块切换日志，不标出每个控制周期究竟由哪个组件输出动作。与前面的扎带穿扣奖励视频是两个任务，不要混用其成功判据。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方「Learned Policies / Cut Ziptie」<a href="https://research.nvidia.com/labs/gear/enpire/videos/cut-ziptie-success.mp4" rel="noopener noreferrer">原视频</a>，真机执行，原文件、官网播放器默认 8×；此处可用 B 站控件调整速度。VLA 与程序组合的机制依据论文 §3.5；视频本身不证明 VLA 权重发生了更新，也不单独证明迁移收益。</p>
+<table>
+<thead>
+<tr>
+<th>对照对象</th>
+<th>主要更新或改进对象</th>
+<th>执行时依赖</th>
+<th>与 ENPIRE 的关系</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>常规 VLA／BC 训练</td>
+<td>观测到动作的策略权重</td>
+<td>观测、任务与训练后的策略</td>
+<td>可以作为 ENPIRE 试验的一条策略路线</td>
+</tr>
+<tr>
+<td>常规 RL</td>
+<td>策略、价值函数及相关参数</td>
+<td>策略与环境交互</td>
+<td>可以作为其内部学习循环；实验组织仍需有人或 Agent 负责</td>
+</tr>
+<tr>
+<td>ENPIRE</td>
+<td>程序、训练方案、候选策略及研究过程</td>
+<td>固定环境接口、策略与控制系统</td>
+<td>组织真实反馈研究，并可同时搜索上述路线</td>
+</tr>
+<tr>
+<td>ASPIRE</td>
+<td>控制程序、已验证的修复经验与可检索技能库</td>
+<td>程序工具与作为上下文的技能知识</td>
+<td>更强调细粒度诊断与技能知识积累；与 ENPIRE 的实验基础设施侧重点不同</td>
+</tr>
+</tbody></table>
+<p>ASPIRE 对照依据其方法中的执行引擎、技能库和演化搜索；本表不比较不同任务上的成功率，也不声称两套系统已经集成。<a href="https://arxiv.org/html/2607.00272v2#S2" rel="noopener noreferrer">ASPIRE §2</a></p>
+<p>运行时组合希望改善任务完成，而非自动改变 VLA 权重。<a href="#vla-配上程序工具后能完成更多任务吗">RoboCasa 比较</a>检验完整方案，<a href="#检测不到目标时改图像和提示词有用吗">感知诊断</a>再追问其中一个工具为什么会失败。</p>
+<h2 id="实验">实验</h2>
+<p>前文有两种需要分别检验的主张：<strong>机器人策略能否变好，以及 Agent 能否更有效地找到好策略。</strong> 前者看真实任务完成情况，后者还要看研究时间、资源投入和失败诊断。下面按这个依赖关系读实验；这些研究使用不同任务和条件，并不是同一个 VLA 检查点依次加上 BC、RL、工具和多机器人后的逐步消融。</p>
+<table>
+<thead>
+<tr>
+<th>前文设计</th>
+<th>它希望改善什么</th>
+<th>本节要回答的问题与证据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>固定复位与验证接口</td>
+<td>反复得到可比较的物理反馈</td>
+<td><a href="#自动评分和复位怎样支撑可信的实验">评分和起点可靠吗</a>；附录 A 的构建与诊断，完整可靠性对照仍缺失</td>
+</tr>
+<tr>
+<td>Agent 修改程序与工具调用</td>
+<td>从试错中找到有效控制规则</td>
+<td><a href="#能在仿真里改好程序就能在真机上成功吗">仿真中有效能否直接推到真机</a>；图 5 与图 3 上排</td>
+</tr>
+<tr>
+<td>Agent 搜索 BC／RL 训练方案</td>
+<td>用数据改进精密接触策略</td>
+<td><a href="#让-agent-修改训练方案插销策略真的会变好吗">插销策略是否随研究改善</a>；图 3 下排与图 12</td>
+</tr>
+<tr>
+<td>Agent 直接查看实验图像</td>
+<td>更快定位几何和接触错误</td>
+<td><a href="#让-agent-直接看图能更快找到有效程序吗">视觉接口是否减少研究时间</a>；图 14，另用图 15 检查模型与运行框架</td>
+</tr>
+<tr>
+<td>多站点试验与 Git 共享</td>
+<td>同时探索更多假设并传播成果</td>
+<td><a href="#多给几台机器人能更快且更省地找到策略吗">增加机器人是否更快且更省</a>；图 3 右列与图 7</td>
+</tr>
+<tr>
+<td>跨任务 Markdown 摘要</td>
+<td>在新任务中复用研究经验</td>
+<td><a href="#把文字经验交给新任务能少走弯路吗">文字经验能否少走弯路</a>；§3.4 与附录 B.1，缺少完整等预算对照</td>
+</tr>
+<tr>
+<td>VLA 与感知、规划工具组合</td>
+<td>改善操作起点与长程执行</td>
+<td><a href="#vla-配上程序工具后能完成更多任务吗">组合系统能否完成更多任务</a>；图 6 与真机示例</td>
+</tr>
+<tr>
+<td>改图像分辨率与目标提示词</td>
+<td>修复工具层的目标定位失败</td>
+<td><a href="#检测不到目标时改图像和提示词有用吗">检测能否改善</a>；图 16 的局部诊断</td>
+</tr>
+</tbody></table>
+<p><strong>共同设置。</strong> 真机主实验使用双臂 YAM。附录 B 报告每站一个顶部相机和两个腕部 D405 相机，GPU 插入另有侧面 D435i；策略环 30 Hz、关节控制 100 Hz。具体策略是否使用全部相机，仍取决于配置。第二阶段固定环境的复位、验证和约束，允许 Agent 修改策略程序及训练代码。Gym-PushT 和 RoboCasa 是另外的仿真实验，不能与真机成绩直接相减。<a href="https://arxiv.org/html/2606.19980v2#S3" rel="noopener noreferrer">论文 §3、附录 B.2–B.4</a></p>
+<h3 id="自动评分和复位怎样支撑可信的实验">自动评分和复位怎样支撑可信的实验</h3>
+<p>这组证据对应 <a href="#环境为何必须能复位能判断能约束">EN 模块</a>。如果一次失败被误判为成功，学习器会收到错误奖励，Agent 也会选择错误方案；如果每次复位改变了难度，研究曲线的上升就未必来自策略。因此，环境建设必须先回答“能否正确评分、能否回到合适起点”，之后才有资格比较策略。</p>
+<p><strong>怎样检验。</strong> 附录 A.2 的扎带穿扣例子以几分钟带成功／失败标签的资料构建隔离评估集，要求 Agent 满足精确率、召回率与推理延迟要求。精确率关心“判成功的样本里有多少真的成功”，召回率关心“真实成功中有多少被识别”。Agent 可改变分割提示词、裁剪和几何阈值；评估指标计算不允许修改，资料可用于分析失败，但禁止用于训练。若误报、漏报和响应时间都达到要求，才支持将它用于奖励。这里检验的是评分程序，并没有训练机器人策略。</p>
+<p><strong>作者报告结果。</strong> 最终流程使用双视角几何检查，并通过推理实现优化满足 150 ms 延迟预算。插销另使用视觉对齐、插入深度与接触信息；复位则用程序技能送到精密动作的起点。可以回看 <a href="#看验证视频同一过程怎样从图像变成判定依据">双视角奖励视频</a> 和 <a href="#看复位视频一次实验结束后怎样重新得到可用起点">两个插销复位初态</a>，分别理解评分依据和起点准备。<a href="https://arxiv.org/html/2606.19980v2#A1" rel="noopener noreferrer">附录 A.1–A.2</a></p>
+<p><strong>回答与缺口。</strong> 论文给出了环境接口怎样建立、为何用多视角，以及一次满足延迟要求的实例；没有在这些材料中给出完整精确率／召回率数值、标签样本数、各任务复位成功率和耗时分布，也没有一组“单视角对双视角”的完整量化消融。因此可说它提供了自主实验的可操作基础，不能说已经量化证明每个环境组件可靠。允许研究评估集的失败案例，也使最终未接触测试集是否存在成为需要补充的证据。</p>
+<h3 id="能在仿真里改好程序就能在真机上成功吗">能在仿真里改好程序就能在真机上成功吗</h3>
+<p>这里检验 <a href="#程序搜索改的是可执行决策规则">程序策略路线</a>：Agent 读反馈后改感知与控制工具的调用，能否把 T 形块推到目标位置？先用这个较直接的路线，是为了确认物理试错循环能产生有效程序；加入仿真对照，则能暴露真实接触带来的额外困难。</p>
+<p><strong>怎样比较、怎样算有效。</strong> 论文比较 Codex／GPT-5.5 xhigh、Claude Code／Opus 4.7 High、Kimi Code／K2.6 thinking，在 Gym-PushT 及其真实任务对应设置中研究启发式控制。变化包括 Agent 的模型与运行框架，以及仿真／真机环境；因此它是整套研究配置的比较。仿真图 5 看达到首次成功与 95% 成功水平所需的研究时间；真机图 3 上排纵轴标为归一化成绩。两图都问“研究是否产生进步”，但不能把不同纵轴当成同一个成功率。若各系统在仿真中都能解决问题、在真机上却分化，就支持“物理研究还有数字环境未覆盖的瓶颈”。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/e62770e488bd1af7fbb4829a3c7924ed5e43ea8d379abb06f9d50f9e0b56b0e7.png" alt="原论文图 5：Gym-PushT 中程序研究的轨迹与达到目标的时间" loading="lazy"></button><figcaption>原论文图 5：Gym-PushT 中程序研究的轨迹与达到目标的时间</figcaption></figure></p>
+<p>原论文图 5，官方 HTML 原始 PNG。右侧应沿时间轴看“首次成功”到“达到高成功水平”的距离；左侧是轨迹示例，不是独立重复试验的统计。</p>
+<p><strong>作者报告结果。</strong> 三种 Agent 都能在仿真中解决 Push-T；Claude Code 和 Codex 约 2 小时达到 95%，Kimi 约需两倍时间。转到真实环境后，作者报告三种 Agent 中有两种未能解决该任务。下面的图 3 上排左侧展示真机研究曲线；下排和右列分别留给后续的梯度学习与车队问题。<a href="https://arxiv.org/html/2606.19980v2#S3.SS1" rel="noopener noreferrer">论文 §3.1</a></p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/e700a03681fc7e7d754ed71365633cf36c22b1418fd5943dd80dd099d87f4650.png" alt="原论文图 3：真机程序搜索、梯度学习与车队规模的比较" loading="lazy"></button><figcaption>原论文图 3：真机程序搜索、梯度学习与车队规模的比较</figcaption></figure></p>
+<p>原论文图 3，PDF 第 4 页，官方原始 PNG。左列比较模型与运行框架组合，右列比较 1、4、8 个 Agent—机器人配对；上排 Push-T 使用归一化成绩，下排插销使用成功率。先只读上排左图，避免把四个子图混为一次实验。</p>
+<p><strong>回答与边界。</strong> 程序生成加反馈可以找到有效控制规则，但仿真中解决任务不足以保证真实接触下同样有效。作者把差异与动力学、摩擦及物体运动的变化联系起来；这些因素没有逐个独立消融。图中的淡线／阴影未充分说明重复次数与统计含义，各次成功率评估的 episode 数也未在该段列全；真机归一化成绩的完整归一化口径也不宜自行补写。该结果支持继续研究更丰富的策略路线，不构成“RL 必然优于程序策略”的跨任务证明。</p>
+<h3 id="让-agent-修改训练方案插销策略真的会变好吗">让 Agent 修改训练方案，插销策略真的会变好吗</h3>
+<p>这一问题接续 <a href="#策略如何利用-critic又为什么会加入-bc-约束">BC／RL 的参数更新机制</a>。细小接触误差可能难以全部写成规则，于是 Agent 可以改训练方案，让学习器从轨迹中更新神经策略。要检验的首先是“这种研究方式能否推动插销能力改善”，而不是预先宣布某种 RL 损失获胜。</p>
+<p><strong>怎样比较、怎样算有效。</strong> 在固定的真机插销环境中，Agent 研究 BC、汇总在线数据的迭代 BC、在线／离线／离线转在线 RL、BC 正则及训练参数。主图 3 下排左侧比较的是不同 Agent 配置随研究时间的进展，研究目标为连续 50 个 episode 全部成功。已有数据、代码和检查点可在当前研究会话的假设间复用；论文未逐条列出曲线起点对应的完整示范量与权重。因此图 3 不是“相同起始检查点分别只开 BC 或只开 RL”的受控算法排行榜。若固定评分下的策略成绩随研究上升，并能追溯到实际尝试的方案，就支持 Agent 能组织梯度学习研究。<a href="https://arxiv.org/html/2606.19980v2#S3.SS2" rel="noopener noreferrer">论文 §3.2、附录 B.1</a></p>
+<p><strong>结果怎样读。</strong> 图 3 下排左侧显示这些研究过程提高了插销成功率；图 12 进一步回答“它们究竟改了什么”。先看上半部假设分支，再沿相同时间轴看下半部成绩，区分做过但无收益的尝试与带来增益的节点。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/476571037e815525f9f16d3b1b923a42c7f26a5557c5634cc16198463c3c760d.png" alt="原论文图 12：插销训练方案的研究分支与成绩变化" loading="lazy"></button><figcaption>原论文图 12：插销训练方案的研究分支与成绩变化</figcaption></figure></p>
+<p>原论文图 12，PDF 第 25 页，350 DPI 裁切。实心绿色节点提高了团队平均最佳成绩，空心节点评估后没有增益；下方是“平均最佳成绩”，不是最新策略每次执行的原始成功序列。</p>
+<p><strong>作者报告结果。</strong> 示范混合节点约提升 3.8 个百分点，BC 正则节点约提升 10.8 个百分点；后续 BC 权重、批量大小、控制补偿节点分别约提升 0.4、0.9、1.3 个百分点。它们说明研究不仅改变神经参数，还会改变训练配方和控制相关代码。由于节点有前后依赖、会共享成果，这些数值不能相加成独立收益，也不能当作拆掉各组件后的单变量消融。<a href="https://arxiv.org/html/2606.19980v2#A2.SS6" rel="noopener noreferrer">附录 B.6</a></p>
+<p><strong>回答与边界。</strong> 这组证据支持“Agent 可以在固定物理反馈下探索学习方案，并找到更好的候选策略”。它没有单独回答哪一种算法在等数据、等机器人时间下最好，也不足以把全部进展归因于 BC 正则。要从“搜索过程有效”走到“某个组件有稳定因果收益”，还需冻结起点、预算和其他设置的对照，以及独立复评。原实验逐条示范量、检查点、独立研究次数和误差定义仍不完整；当前代码默认路径也不等于图 12 每个历史方案。</p>
+<h4 id="连续成功与带恢复成功分别说明什么">连续成功与带恢复成功分别说明什么</h4>
+<p>连续成功用于检查插销策略在一段评估窗口中是否稳定。公开评分器区分所有 episode 和动作来源全为 RL 的 episode；纯 RL 窗口不足 50 时不输出完整窗口成功率，人工参与的 episode 会被过滤。因此读 50/50 时应同时看完整时间线。挑出一个达到全成功的窗口，也不等于冻结后的策略在新条件下不会失败。<a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/sr_rolling_window.py" rel="noopener noreferrer">评分实现</a></p>
+<p>执行层还有另一个目标：第一次接触偏了之后，系统能否观察失败并完成恢复？官网的 <strong>99% pass@8</strong> 是作者对展示任务的报告，条件为一次长程 rollout 内，每个子任务最多 8 次依赖此前失败的上下文重试。它衡量带恢复的最终完成情况；不是“99% 首次成功”，也不是一次严格的“同一策略允许 1 次对允许 8 次”的独立消融。逐任务分母、独立重复及它与连续 50 次窗口的逐项对应，仍未充分给出。<a href="https://research.nvidia.com/labs/gear/enpire/" rel="noopener noreferrer">官方指标说明</a></p>
+<p>下面是独立同分布尝试才可使用的教学公式，p 表示每次相同的独立成功概率：</p>
+<div class="equation" aria-label="P(\text{至少成功一次})=1-(1-p)^8"><math display="block" class="tml-display" style="display:block math;"><mrow><mi>P</mi><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mtext>至少成功一次</mtext><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mo>=</mo><mn>1</mn><mo>−</mo><msup><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mn>8</mn></msup></mrow></math></div>
+<p>ENPIRE 的后续重试依赖已有失败和改变后的物理状态，不满足上述前提；不能用官网数字反推首次成功率。最有用的下一步证据是同一冻结策略、相同初态下同时报告首次成功、恢复后成功、尝试次数和完成时间。本文保留这项缺口，同时承认“能恢复后完成任务”本身是有意义的系统能力。</p>
+<h3 id="让-agent-直接看图能更快找到有效程序吗">让 Agent 直接看图能更快找到有效程序吗</h3>
+<p>这组消融对应研究外循环的<strong>失败诊断接口</strong>。Push-T 中，Agent 需要知道物体在哪、接触是否偏了、为什么没有转到目标方向。直接看实验图像可能比绕道文字描述更快；但视觉工具也有调用和解释成本，所以需要比较不同的信息入口。</p>
+<p><strong>怎样比较。</strong> 附录 C 使用真实 <code>pusht-simple</code>，要求把 T 块旋转约 180° 并推到扩大后的目标区，方向容差 10°，平移容差具体数值未在该段给出。任务与成功边界保持在这一简化设置，改变 Codex 的视觉访问方式：原生看图；遮蔽图像输入但可调用外部视觉问答；两种入口都关闭，只能读文字或写代码提取图像信息。最后一组仍可处理相机数据，不能称为机器人“无视觉”。<a href="https://arxiv.org/html/2606.19980v2#A3.SS3" rel="noopener noreferrer">附录 C.1、C.3</a></p>
+<p><strong>怎样算有效。</strong> 图 14 记录从开始研究到首次动作、范围达标、方向达标和首次成功的墙钟时间。若某种接口更早得到成功控制器，就说明它降低了这项任务的端到端研究开销；并不意味着最终策略执行得更快或更准。看图时还要分清“更早动起来”和“更早做对”两个阶段。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/28bc6f3d5bcb43d838e26a4d3390d769a5a2fbdef1541ed31782b431eec2d568.png" alt="原论文图 14：视觉接口对发现有效控制器的影响" loading="lazy"></button><figcaption>原论文图 14：视觉接口对发现有效控制器的影响</figcaption></figure></p>
+<p>原论文图 14，PDF 第 26 页，350 DPI 裁切。各组最后一根深色柱表示首次成功；其他柱是中间里程碑。</p>
+<p><strong>作者报告结果。</strong> 原生视觉约 54.67 分钟首次成功，外部视觉问答约 99.18 分钟，代码提取信息的 GoFE vision 条件约 72.32 分钟。原生视觉最先成功，而外部问答并未比代码提取更快。作者据此提出，视觉函数反复调用的开销可能拖慢研究。</p>
+<p><strong>回答与边界。</strong> 结果支持在该任务中为 Agent 提供直接图像诊断有实用价值；接口改变同时改变了可得信息、系统提示和调用成本，不能把全部时间差归因于纯视觉理解能力。该简化任务与正文 Push-T 的成功边界不同，重复次数和误差线定义未充分说明，也不能推广为“所有视觉工具都有害”。</p>
+<h4 id="换模型与换运行框架是同一个改变吗">换模型与换运行框架，是同一个改变吗</h4>
+<p>紧接着的问题是：找到控制器的速度究竟只取决于大模型，还是也取决于它用什么工具界面读日志、改代码和发起试验？附录 C.4 仍使用同类简化真机任务，比较 Codex＋GPT-5.5、Claude Code＋Opus 4.7、Codex＋Opus 4.7 API。后两组同属 Opus 4.7，却使用不同运行框架；前后两组共用 Codex 框架，却更换模型。指标仍是达到任务成功所用的研究时间，不是 token 生成速度。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/2e33ace74196790b66497b99822b829d10f39273d58dbf7e3040c27906adab95.png" alt="原论文图 15：模型与运行框架组合的达到成功时间" loading="lazy"></button><figcaption>原论文图 15：模型与运行框架组合的达到成功时间</figcaption></figure></p>
+<p>原论文图 15，PDF 第 27 页，350 DPI 裁切，保留原像素。三组时间分别约为 54.41、62.01、105.00 分钟。</p>
+<p><strong>回答与边界。</strong> 作者报告原生 Codex 配置最快，Codex 接入 Opus API 最慢，说明模型和运行界面的搭配值得单独评估。它不提供完整的模型×框架交叉实验；工具适配、提示和调用开销也没有全部拆开。因此可以比较这三个完整配置，不能据此给模型能力排一个与运行环境无关的名次。<a href="https://arxiv.org/html/2606.19980v2#A3.SS4" rel="noopener noreferrer">附录 C.4</a></p>
+<h3 id="多给几台机器人能更快且更省地找到策略吗">多给几台机器人能更快且更省地找到策略吗</h3>
+<p>这里的“扩大规模”是一个具体操作：把 <strong>1 个 Agent—机器人配对增加到 4 个或 8 个</strong>，各站异步试验，并通过 Git 采用其他分支的成果。它对应 <a href="#八台机器人加速的是哪一种工作">多机器人研究机制</a>，不是把同一个策略网络变大。若物理试验是瓶颈，多站点应能更快探索假设；若协作与日志阅读占据大量时间，资源可能被浪费。</p>
+<p><strong>怎样比较、怎样算有效。</strong> §3.3 在 Push-T 和插销中使用相同的环境接口、奖励与复位，改变配对数量，并比较达到同一任务成绩所需的墙钟时间。这检验的是“给更多机器人与 Agent 后，能否更早得到策略”；机器人总投入和 token 预算没有因此保持不变。若还要声称更省，需要同时比较总资源，不能只看耗时下降。</p>
+<p><strong>作者报告结果。</strong> 图 3 右列与 §3.3 给出：Push-T 达到归一化 1.0 的时间从约 5 小时缩至 2 小时；插销达到近乎全成功的时间从超过 1.5 小时缩至约 40 分钟。它支持额外资源能够转化为更快的策略研究；没有“同样多机器人但禁止 Git 共享”的对应对照，故不能将加速全归功于成果共享。<a href="https://arxiv.org/html/2606.19980v2#S3.SS3" rel="noopener noreferrer">论文 §3.3</a></p>
+<p>接下来才看代价。图 7 单独统计插销研究：MRU 是研究墙钟时间里机器人实际执行的比例，GPU 利用率是计算活跃比例；MTU 在 §3.6 定义为每分钟 token 数。右图把达到目标的 token 总量和时间并排展示，才能回答“等结果更快，付出了什么”。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/50d3e4127ab81c739f6a595da22e9e81b863449c6de5f5f550fd71fcf9f5421e.png" alt="原论文图 7：扩大车队后的时间收益与资源代价" loading="lazy"></button><figcaption>原论文图 7：扩大车队后的时间收益与资源代价</figcaption></figure></p>
+<p>原论文图 7，PDF 第 8 页，350 DPI 裁切。左图看资源是否忙起来，中图看 token 速率是否随人数成比例增长，右图看达到目标的总 token 与时间。</p>
+<p><strong>作者报告结果与解释。</strong> 团队从 1 个增至 8 个时，单机器人利用率降低，GPU 活跃利用率提高；8 个 Agent 的 token 速率明显高于理想线性趋势，达到目标的 token 总量也增加。作者将部分闲置归因于读日志、改代码、等待模型以及理解其他分支。结论是<strong>用更多 token 换更短研究时间</strong>，并未证明机器人小时、样本数和费用也下降。<a href="https://arxiv.org/html/2606.19980v2#S3.SS6" rel="noopener noreferrer">论文 §3.6、§4</a></p>
+<p><strong>范围限制。</strong> 图 7 右侧时间约从 4.5 小时降至 2 小时，与 §3.3／图 3 的插销约 40 分钟没有充分解释对应关系；保留各自实验语境，不合成统一加速倍数。重复次数及误差线定义未充分交代。输入、输出与缓存 token 的成本不同，附录 C.2 的分类统计也说明 token 总数不能直接换成费用；它采用另一个简化 Push-T 设置，不能接在图 7 后冒充同一实验的下一阶段。</p>
+<h3 id="把文字经验交给新任务能少走弯路吗">把文字经验交给新任务能少走弯路吗</h3>
+<p>这一设计对应 <a href="#经验到底存在哪里能保留多久">跨任务经验保存</a>。如果 Agent 已经在插销中发现了有用的训练设置、失败模式与控制修正，把这些写成说明，可能减少 GPU 插入任务中的重复探索。这里改变的是新研究会话的上下文，不是直接继承插销策略的权重。</p>
+<p><strong>实际做了什么。</strong> 作者让 Agent 在插销研究后总结训练方案的演进，并把 Markdown 摘要附到 GPU 插入的新任务指令中；原始轨迹、隐藏日志和检查点仍被清除。新任务有自己的真机执行和成功判定，GPU 插入另增加侧面相机。若要证明摘要带来增益，应该在相同新任务、起点和资源下比较“有摘要／无摘要”的达标时间或成绩；这是需要的对照，不能把换任务前后的分数差当作它的替代。</p>
+<p><strong>作者报告结果。</strong> §3.4 称加入经验后，新一轮 GPU 插入研究达到较高成功率；附录 B.1 说明信息迁移的载体与清理边界。这支持“研究总结可以被交给新任务，并用于其自主研究”的实例。<a href="https://arxiv.org/html/2606.19980v2#S3.SS4" rel="noopener noreferrer">论文 §3.4、附录 B.1</a></p>
+<p><strong>回答与缺口。</strong> 在已核查材料中，未找到成套的等预算有／无摘要曲线、效应量和独立重复数。因此论文展示了迁移流程和一个成功实例，尚不足以量化“究竟少走了多少弯路”，更不能改写为策略权重零样本掌握新任务。前文提出的真实摘要、无摘要和无关摘要对照，是下一步建议实验，并非作者已完成的三组消融。</p>
+<h3 id="vla-配上程序工具后能完成更多任务吗">VLA 配上程序工具后能完成更多任务吗</h3>
+<p>这里检验 <a href="#vla-在系统中的位置可以变化">运行时模块组合</a>。一个 VLA 可能在目标附近能完成抓取，却容易从不合适的接近姿态失败；Agent 可以先用检测与规划把夹爪送到悬停位置，再调用后续操作。要问的是“组织整条执行路径是否改善任务完成”，不能预先归因为 VLA 权重提升。</p>
+<p><strong>怎样比较。</strong> 图 6 在 RoboCasa 展示开柜、开水龙头、开抽屉、打开搅拌机机头、从水槽搬到台面、关炉灶、从台面搬到柜中、放置咖啡杯八项任务，对照 GR00T N1.5、ENPIRE 与 CaP-X。论文将 CaP-X 描述为没有自主研究的零样本工具使用基线。GR00T 通过学习策略执行，生成脚本则组合公开感知、规划和操作 API；这是不同完整执行方案的比较，不能把 CaP-X 或 GR00T 自动解释成“只从 ENPIRE 拿掉一个组件”。</p>
+<p><strong>保持了什么、怎样算有效。</strong> 附录 D.2 对每项报告的 40-episode 评估固定同一组 seed／layout／style，生成列表的种子为 42；各方法共用任务指令、初始场景、相机配置和原生成功谓词，不提供 oracle 目标位姿或物体真值状态。每个 episode 运行一次脚本，结束后查原生成功判定；正式脚本空间移除复位与 oracle 接口。因此，这里衡量固定场景中的仿真任务完成率，不能套用真机 pass@8 的重试协议。若 ENPIRE 在匹配场景上完成更多任务，支持完整方案的执行收益。<a href="https://arxiv.org/html/2606.19980v2#A4" rel="noopener noreferrer">附录 D.1–D.2</a></p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/5f643f7eba7c44db67f49ca6a15d0827d183328f0b4b149682ddc78a6458ba60.png" alt="原论文图 6：RoboCasa 的任务覆盖与完整方案比较" loading="lazy"></button><figcaption>原论文图 6：RoboCasa 的任务覆盖与完整方案比较</figcaption></figure></p>
+<p>原论文图 6，PDF 第 8 页，官方原始 PNG。左侧看所选八项操作的范围，右侧比较三个完整方案的汇总结果；绿色 ENPIRE 柱高于两个基线。</p>
+<p><strong>作者报告结果。</strong> 图 6 报告 ENPIRE 优于 GR00T N1.5 与 CaP-X；§3.5 描述 Agent 发现先检测与规划到悬停位、再抓取的有效组合，并将这一思路用于真机剪扎带。下面保留一个仿真执行实例，用于理解空间动作；真机部分可回看 <a href="#vla-在系统中的位置可以变化">剪扎带视频</a>。<a href="https://arxiv.org/html/2606.19980v2#S3.SS5" rel="noopener noreferrer">论文 §3.5</a></p>
+<figure class="report-video"><div class="pb-video" data-part="9" data-player="https://player.bilibili.com/player.html?bvid=BV11Psw6yEKR&amp;p=9&amp;autoplay=1&amp;danmaku=0&amp;poster=1"><div class="pb-stage"><button type="button" class="pb-load" aria-label="播放 P9：RoboCasa 仿真 · Coffee Setup Mug / Seed 1"><img src="../assets/enpire/a680daab9cb615d34e14980086e15d13fa035be98ed01a5e51d32b77a157c251.jpg" alt="" loading="lazy"><span class="pb-play" aria-hidden="true">▶ 播放 · P9</span></button></div><div class="pb-actions"><a href="https://www.bilibili.com/video/BV11Psw6yEKR/?p=9" target="_blank" rel="noopener noreferrer">在B站打开 P9 ↗</a><button class="pb-close" type="button" hidden>收起播放器</button></div><p class="pb-note">原视频字节不变；上传副本文件名添加分P序号</p><noscript><p>请通过上方链接在B站播放本段视频。</p></noscript></div><figcaption>RoboCasa 仿真 · Coffee Setup Mug / Seed 1</figcaption></figure>
+<p><strong>观看重点。</strong> 跟随夹爪接近杯子、抓持和移动，将动作对应到检测、规划与策略执行接口。这是官网 Coffee Setup Mug、Seed 1、右相机的物理仿真录像，不是真机，也不是模型生成的未来画面。视频不标注逐时刻模块切换，只帮助观察作者所展示的任务行为。</p>
+<p><strong>来源与边界。</strong> NVIDIA ENPIRE 官方 <a href="https://research.nvidia.com/labs/gear/enpire/videos/robocasa/coffee-setup-mug-seed-1-right.mp4" rel="noopener noreferrer">RoboCasa 原视频</a>，原文件、官网播放器默认 8×；此处可用 B 站控件调整速度。单个 seed 的演示不能替代 40 个 episode 的统计；是否成功由评测框架的原生谓词决定。</p>
+<p><strong>回答与限制。</strong> 证据支持在这些任务和工具接口下，Agent 研究得到的完整方案能够优于所列基线，并展示一种可落到真机的组合策略。图 6 没有单独拆出“只加悬停规划”或“只加检测”的同检查点消融，因而不能把汇总收益全部归给某一工具，也没有证据把这组结果写成 VLA 预训练、监督适配、RL 依次提升的链条。图中误差线和汇总聚合规则未充分说明；本文保留原图，不从柱高补写精确小数。研究期间的试验次数、各方法调参预算、评估集合被反复接触的程度仍需更多记录。</p>
+<h3 id="检测不到目标时改图像和提示词有用吗">检测不到目标时改图像和提示词有用吗</h3>
+<p>最后回到完整方案里的一个具体失败点：脚本规划正确，感知 API 却给了错误目标掩码，机器人仍会抓错。附录 D 的诊断因此暂时拿掉后续动作，只问“目标是否被正确检测”。它检验的是<strong>感知输入与工具调用的修改</strong>，没有训练新的视觉模型，也不是再次测整项任务成功率。</p>
+<p><strong>怎样比较、怎样算有效。</strong> 作者在同一组 RoboCasa 台面到柜内的诊断场景中，对每个设置评估 20 次目标查询，改变顶部 RGB 图像分辨率及提示词：原任务措辞对 Agent 生成的候选提示。比较同一分辨率的两条线，检查提示改写是否有效；沿同一条线看不同分辨率，检查图像细节是否有效。正确掩码增多支持感知瓶颈得到缓解，但不能直接说明抓取与放置也成功。</p>
+<p><figure><button type="button" class="image-zoom-trigger" title="点击放大" aria-label="点击查看大图"><img src="../assets/enpire/a25cafca024564a21e67827a03a338a6c9c8202100d0393fc5252f74389614d5.png" alt="原论文图 16：分辨率与提示词对目标检测的影响" loading="lazy"></button><figcaption>原论文图 16：分辨率与提示词对目标检测的影响</figcaption></figure></p>
+<p>原论文图 16，PDF 第 27 页，350 DPI 裁切；每个点的分母是 20 次目标查询。图中候选提示的搜索和选择属于 Agent 的工具研究过程，不表示一个固定提示在全新测试集上的无条件收益。</p>
+<p><strong>作者报告结果。</strong> 原提示在 256×256 时正确 10/20，480×640 时为 13/20，更高分辨率下达到 14/20；候选提示在 256×256 时为 14/20，在 480×640 时已达到 17/20，之后趋于平台。图中支持的解释是：提高分辨率能补回部分细节，改写目标措辞还可减少歧义；二者都不能消除全部失败。<a href="https://arxiv.org/html/2606.19980v2#A4.SS2" rel="noopener noreferrer">附录 D 结果分析、图 16–18</a></p>
+<p><strong>回答与边界。</strong> 这是一组比整套系统比较更接近局部诊断的证据，帮助解释为什么 Agent 需要研究工具输入，而不仅改运动程序。20 次查询是较小诊断集合；掩码正确性的标注者、候选提示搜索预算、独立重复和未接触测试集未在该段充分交代。检测改善与最终操作收益之间，还缺一组保持其他组件不变的端到端对照。</p>
+<h3 id="这些实验合起来最有力地支持什么">这些实验合起来最有力地支持什么</h3>
+<p>最强的共同结论是：在已准备好的物理反馈接口和所列任务内，ENPIRE 可以让编码 Agent 搜索程序或训练方案，并把更多实验资源转化为更快的策略研究。视觉入口和工具层感知会影响这个过程，运行时组合也可能改善整体执行。更强的主张——无需环境准备、各组件都有独立收益、经验迁移有稳定量化增益、资源成本同时下降——仍没有同等充分的受控证据。后面的<a href="#下一项最能区分解释的实验">建议实验</a>专门区分“更多试验”“更好的既有算法”和“Agent 有效诊断”各自的贡献。</p>
+<h2 id="局限">局限</h2>
+<h3 id="作者明确指出的局限">作者明确指出的局限</h3>
+<p>研究过程中，机器人与计算资源没有被充分利用；Agent 需要读日志、写代码、调试和等待。团队规模增加后，相互理解与采用分支成果也消耗时间。更大车队缩短达到目标的墙钟时间，但 token 消耗可能超线性增长。<a href="https://arxiv.org/html/2606.19980v2#S4" rel="noopener noreferrer">论文 §4</a></p>
+<h3 id="从证据可以进一步划出的边界">从证据可以进一步划出的边界</h3>
+<p><strong>工程判断：自动复位与自动评分是能力前提，也是潜在误差源。</strong> 复位分布漂移，会让相邻两轮不再可比；验证器误报，会同时污染奖励和成绩。固定规则阻止研究 Agent 改分，但固定本身不能保证规则正确。需要独立核验、保存失败案例以及对边界情况的检查。</p>
+<p><strong>工程判断：关键阶段的高成功率不等于全流程可靠性。</strong> 抓取、交接、准备、插入、取出和复位各有失败可能。学习聚焦插入阶段非常合理，报告系统能力时却应同时给出起点条件、复位耗时和复位成功率。各阶段的失败也可能相关，不能未经验证就把局部成功率相乘成全流程成绩。</p>
+<p><strong>证据缺口：原实验配置与公开快照的对应不完整。</strong> 每条曲线的完整演示量、权重起点、策略版本、奖励阈值、重试成本及独立重复次数，不能仅凭当前仓库完全恢复。公开代码既支持人工数据，也有纯 RL 统计；工具支持某种模式，不证明论文所有运行都采用或排除了它。</p>
+<p><strong>证据缺口：跨任务与长期自治的覆盖有限。</strong> 文字经验迁移、数小时研究和多个接触任务，不足以证明任意任务的开放式自我进化、跨天永久记忆或无需维护的工业系统。论文没有给出本文所需的完整中断恢复、长期老化与任意物体故障覆盖证据。</p>
+<h3 id="下一项最能区分解释的实验">下一项最能区分解释的实验</h3>
+<p><strong>建议或假设。</strong> 在一个固定插销环境中，预先锁定复位、验证器、起始数据和资源预算，比较：固定 BC 基线、固定 RL 配方、Agent 只改程序、Agent 可改训练方案。每条路线用多个独立研究运行，并在研究结束后冻结候选策略，在未参与选择的初始条件上评估首次成功、带恢复成功、完成时间、总尝试数、人工介入与复位失败。</p>
+<p>这个对照可以区分“性能提升主要来自更多试验”“来自某个既有强算法”与“来自 Agent 对反馈的有效诊断和方案选择”。若带恢复成绩提高但首次成功与耗时没有改善，贡献主要在恢复；若只在搜索所用场景提高，则仍需处理评估适应问题。这是后续研究建议，本教程没有执行该实验。</p>
+<h2 id="对-vla机器人落地的意义">对 VLA/机器人落地的意义</h2>
+<p>ENPIRE 提供了一个有用的系统分工：VLA 或其他策略负责特定的观测到动作映射，编码 Agent 可以在更慢的时间尺度上组织实验、定位问题、改进策略或模块组合。是否把某项问题交给更大的模型、更多数据、程序工具或控制改进，应由失败证据决定。</p>
+<table>
+<thead>
+<tr>
+<th>能力环节</th>
+<th>ENPIRE 中可以承担的角色</th>
+<th>迁移到另一机器人前要核实什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>感知与定位</td>
+<td>选择和组合分割、位姿与视觉工具，诊断失败</td>
+<td>相机、坐标、遮挡及感知输出的可靠性</td>
+</tr>
+<tr>
+<td>任务与动作策略</td>
+<td>程序策略、BC／RL 或 VLA 组合</td>
+<td>输入输出语义、训练数据和策略能力边界</td>
+</tr>
+<tr>
+<td>运动与关节控制</td>
+<td>规划工具、末端到关节转换、PD 与重力补偿</td>
+<td>时序、动作尺度、限位、接触和执行误差</td>
+</tr>
+<tr>
+<td>验证与恢复</td>
+<td>固定成功判定、失败检测、重试与复位</td>
+<td>假阳性、复位失败、恢复耗时和终止条件</td>
+</tr>
+<tr>
+<td>研究与更新</td>
+<td>假设、试验、数据、代码、参数及经验总结</td>
+<td>版本归属、留出评测、预算和成果保留标准</td>
+</tr>
+</tbody></table>
+<p><strong>最值得迁移的原则是：让每次试验产生可比较、可追溯、可用于下一次决策的证据。</strong> 对已有 VLA 系统，第一步可以先梳理哪种失败属于感知、动作策略、控制或复位，再决定增加哪种学习循环。该原则并不要求把 ENPIRE 的某套硬件或全部算法原样搬过来。</p>
+<p>最后用六个问题检查理解：</p>
+<ol>
+<li>为什么策略研究阶段要固定复位和奖励，而奖励设计又可以在设置阶段被 Agent 改进？</li>
+<li>插销失败后，执行恢复、RL 更新和 Agent 修改代码分别改变了什么？</li>
+<li>为什么示范缓冲区存在，不足以证明 RL 损失中有 BC 正则？</li>
+<li>三维末端增量、十维动作格式和十四个执行关节分别属于哪一层？</li>
+<li>99% pass@8、50/50 窗口与 17/20 检测准确率，分母为何不同？</li>
+<li>Git 共享、文字摘要和策略参数，各能保留哪种经验？</li>
+</ol>
+<p>如果能沿着一条轨迹解释这些区别，就已经抓住了 ENPIRE 的主要机制：固定实验条件，明确改进对象，用真实反馈检验下一步。</p>
+<h2 id="证据边界与参考资料">证据边界与参考资料</h2>
+<p>本文基于公开资料和固定代码提交，没有独立复现实验。原论文图片按其 CC BY 4.0 许可署明作者、图号与来源；新增图为教学重建。原始 PNG 保留其提供的像素尺寸，PDF 裁图以 350 DPI 生成；图片都可以在 HTML 中放大。</p>
+<table>
+<thead>
+<tr>
+<th>论点／接口</th>
+<th>主要依据</th>
+<th>本文保留的边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>两阶段与四模块</td>
+<td>论文 §2、图 2</td>
+<td>环境设置中的人工反馈与第二阶段自治分开</td>
+</tr>
+<tr>
+<td>自动奖励与复位</td>
+<td>§2.1、附录 A、图 4／9</td>
+<td>标签来源细节、完整阈值和验证集规模不补猜</td>
+</tr>
+<tr>
+<td>数据、硬件与控制</td>
+<td>附录 B.1–B.5</td>
+<td>30／100 Hz 为论文报告；当前代码配置单独标注</td>
+</tr>
+<tr>
+<td>算法搜索与经验</td>
+<td>§3.2–3.5、附录 B.6、图 12</td>
+<td>节点增益不是独立消融；迁移摘要不等于权重迁移</td>
+</tr>
+<tr>
+<td>成功率与成本</td>
+<td>官网说明、§3–4、图 3／7</td>
+<td>重试、窗口、时间和 token 口径不混用</td>
+</tr>
+<tr>
+<td>仿真和感知诊断</td>
+<td>附录 D、图 6／16–18</td>
+<td>固定评估场景与研究期数据接触分别看待</td>
+</tr>
+<tr>
+<td>BC／RL 和动作接口</td>
+<td>固定提交的配置、训练入口、SACMini 与桥接代码</td>
+<td>静态检查不证明代码已在本次真机验证</td>
+</tr>
+</tbody></table>
+<p>主要来源：</p>
+<ul>
+<li><a href="https://research.nvidia.com/labs/gear/enpire/" rel="noopener noreferrer">ENPIRE 官方项目页与 pass@8 说明</a></li>
+<li><a href="https://arxiv.org/abs/2606.19980v2" rel="noopener noreferrer">ENPIRE arXiv 版本信息</a></li>
+<li><a href="https://arxiv.org/html/2606.19980v2" rel="noopener noreferrer">ENPIRE v2 HTML 全文</a></li>
+<li><a href="https://arxiv.org/pdf/2606.19980v2" rel="noopener noreferrer">ENPIRE v2 PDF</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/tree/99ee90acf65b5b18957c8382ad580db999528be3" rel="noopener noreferrer">公开代码固定提交</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/autoresearch_instruction.md" rel="noopener noreferrer">研究合同</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/configs/experiment/pin_insertion_delta_eef.yaml" rel="noopener noreferrer">插销实验配置</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/train.py" rel="noopener noreferrer">PLD 训练入口</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/vendor/serl_launcher/serl_launcher/agents/continuous/sac_mini.py" rel="noopener noreferrer">SACMini 与 BC 更新</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/disk_buffer_ingestor.py" rel="noopener noreferrer">轨迹入库与来源分流</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/vendor/serl_launcher/serl_launcher/env/remote_deployment_env.py" rel="noopener noreferrer">远程动作桥接</a></li>
+<li><a href="https://github.com/NVlabs/ENPIRE/blob/99ee90acf65b5b18957c8382ad580db999528be3/enpire/policy/pld/runtime/src/enpire_pld/sr_rolling_window.py" rel="noopener noreferrer">成功率统计</a></li>
+<li><a href="https://arxiv.org/html/2607.00272v2#S2" rel="noopener noreferrer">ASPIRE v2 方法</a></li>
+</ul>
+<p>本次媒体核查覆盖官网执行展示、自动复位、奖励验证、Push-T 交互、车队和 RoboCasa 选择器。共选取 9 段视频服务于上述机制；其余 GPU／扎带执行、其他复位初态、另一车队视角与其他仿真任务未全部收入，以避免重复。未公开展示的训练参数更新和代码诊断过程，仍用论文图、公开代码与教学图解解释，不用无关视频填充。</p>
+<p>视频均归属 NVIDIA ENPIRE 项目及原作者，来源链接紧邻播放器；本教程没有重新剪辑、转码或裁切。封面取自对应视频，B 站分 P 与原文件逐一核对。官网“五分钟 rollout”的描述是作者声明；实际时间轴以播放器为准，本次没有独立核验原始采集和剪辑历史。</p>
+<p>本页为博客阅读版，正文图片、公式和图表由本站提供；视频通过 B 站官方外链播放器按需加载。原论文、代码和原视频入口保留在参考资料中。实验结论均按作者报告解读。</p>
+</main>
+  </div>
+  <script src="../assets/enpire/1581750ec33d4c434a03db96c9e7484057f08018ff69859f0de86f42f9195830.js"></script>
+  <script src="../assets/enpire/e6462ae3742c0a4dabe4343fb0fb70314c48ca1e0fa7c998a8e2d6fe9606ba69.js"></script>
+</body>
+</html>

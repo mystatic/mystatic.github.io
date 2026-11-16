@@ -1,0 +1,239 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="draw.io" type="device" version="28.0.0">
+  <diagram id="enpire-overview" name="ENPIRE 项目架构">
+    <mxGraphModel dx="1800" dy="1280" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1280" background="#FFFFFF" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;fillColor=#FFFFFF;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1800" height="1280" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="ENPIRE｜让机器人实验推动策略改进" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=36;fontColor=#193F2C;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="30" width="1680" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="核心贡献：把复位、执行、核验和策略研发接成可重复的真实世界实验闭环。" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#5B7063;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="91" width="1680" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="en" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#EDF5EC;strokeColor=#9BBAA2;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="150" width="1680" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="en-title" value="EN · 环境基础" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=27;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="168" width="380" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="en-stage" value="人给任务和反馈，Agent 构建" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=21;fontColor=#466451;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="85" y="213" width="360" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="en-fixed" value="贡献：让实验可重复、可比较" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=21;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="264" width="365" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="reset" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#C3D5C5;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="480" y="185" width="320" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="reset-title" value="自动复位" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="498" y="200" width="284" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="reset-desc" value="回到可开始实验的状态" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="498" y="240" width="284" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="verify" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#C3D5C5;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="825" y="185" width="320" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="verify-title" value="自动核验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="843" y="200" width="284" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="verify-desc" value="根据传感器判断成功／失败" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="843" y="240" width="284" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="constraint" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#C3D5C5;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="185" width="320" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="constraint-title" value="操作约束" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1188" y="200" width="284" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="constraint-desc" value="限制工作区、动作和接触" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1188" y="240" width="284" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="en-contract" value="策略研究时&lt;br&gt;固定这些接口" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1510" y="187" width="205" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="stage2" value="自主策略研究｜下方主循环反复运行，新的候选策略都要重新做实验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=24;fontColor=#193F2C;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="357" width="1300" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="e" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#F0F6F1;strokeColor=#8FAC96;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="425" width="450" height="410" as="geometry" />
+        </mxCell>
+        <mxCell id="pi" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#F2F6FB;strokeColor=#9CB4D0;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="650" y="425" width="500" height="410" as="geometry" />
+        </mxCell>
+        <mxCell id="r" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FCF6EB;strokeColor=#D1B67C;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="425" width="450" height="410" as="geometry" />
+        </mxCell>
+        <mxCell id="e-title" value="E · 实验反馈与方案选择" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=27;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="443" width="400" height="37" as="geometry" />
+        </mxCell>
+        <mxCell id="e-contribution" value="贡献：决定下一步试什么" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="492" width="400" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-title" value="PI · 策略改进" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=27;fontColor=#315E8D;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="675" y="443" width="450" height="37" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-contribution" value="贡献：把想法变成候选策略" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#315E8D;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="675" y="492" width="450" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="r-title" value="R · 真实机器人实验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=27;fontColor=#886420;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="443" width="400" height="37" as="geometry" />
+        </mxCell>
+        <mxCell id="r-contribution" value="贡献：取得可核验的真实反馈" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=23;fontColor=#886420;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="492" width="400" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="e-input" value="输入：实验记录、成绩、已有方案" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=20;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="85" y="550" width="400" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="e-process" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#CBDCCE;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="85" y="602" width="400" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="e-process-text" value="编码 Agent 分析失败、提出假设&lt;br&gt;比较新旧方案，保留有效修改&lt;br&gt;可读取其他分支的代码与经验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=20;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="103" y="612" width="366" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e-output" value="产物：下一假设＋保留的研究成果&lt;br&gt;改动：研究计划、代码版本与经验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="740" width="400" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-code" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#C4D1E3;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="675" y="550" width="450" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-code-title" value="路线 A｜程序策略" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#315E8D;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="692" y="561" width="416" height="27" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-code-desc" value="Agent 改代码，组合感知、规划与控制工具" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="692" y="598" width="416" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-learning" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#C4D1E3;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="675" y="657" width="450" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-learning-title" value="路线 B｜学习策略" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#315E8D;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="692" y="669" width="416" height="27" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-learning-desc" value="数据仓库 → BC／RL 学习器 → 新权重&lt;br&gt;BC 模仿动作；RL 利用奖励改进策略" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="692" y="708" width="416" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="pi-output" value="产物：候选程序／候选权重 → 部署复验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#315E8D;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="675" y="789" width="450" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r-policy" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E2D3B5;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="550" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="r-policy-text" value="当前图像与机器人状态 → 策略给动作" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=20;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1332" y="560" width="366" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="r-down1" value="" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#A48139;strokeWidth=2.5;fontSize=18;fontColor=#A48139;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1515" y="612" as="sourcePoint" />
+            <mxPoint x="1515" y="638" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r-physical" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E2D3B5;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="638" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="r-physical-text" value="动作 → 控制器 → 机器人真实接触" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=20;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1332" y="648" width="366" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="r-down2" value="" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#A48139;strokeWidth=2.5;fontSize=18;fontColor=#A48139;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1515" y="700" as="sourcePoint" />
+            <mxPoint x="1515" y="726" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r-result" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E2D3B5;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="726" width="400" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r-result-text" value="调用 EN 核验并记录结果&lt;br&gt;按规则继续、失败恢复或结束复位" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=20;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1332" y="735" width="366" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="en-to-r" value="复位／评分／约束" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#608766;strokeWidth=2.5;fontSize=18;fontColor=#608766;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;dashed=1;dashPattern=6 4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1640" y="330" as="sourcePoint" />
+            <mxPoint x="1640" y="425" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-to-pi" value="研究假设" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#3D7258;strokeWidth=2.5;fontSize=18;fontColor=#3D7258;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="570" as="sourcePoint" />
+            <mxPoint x="650" y="570" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pi-to-r" value="候选策略" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#527BA9;strokeWidth=2.5;fontSize=18;fontColor=#527BA9;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1150" y="570" as="sourcePoint" />
+            <mxPoint x="1290" y="570" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="data" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#F8FAF7;strokeColor=#B5C8B7;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="650" y="900" width="500" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="data-title" value="实验记录／数据仓库" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="672" y="913" width="456" height="29" as="geometry" />
+        </mxCell>
+        <mxCell id="data-desc" value="观测、实际动作、奖励、视频与日志" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=20;fontColor=#243D32;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="672" y="951" width="456" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="r-to-data" value="" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#3D7258;strokeWidth=2.5;fontSize=18;fontColor=#3D7258;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1515" y="835" as="sourcePoint" />
+            <mxPoint x="1150" y="953" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1515" y="953" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r-to-data-label" value="保存每次尝试" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#466451;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="913" width="280" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="data-to-e" value="" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#3D7258;strokeWidth=2.5;fontSize=18;fontColor=#3D7258;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="650" y="953" as="sourcePoint" />
+            <mxPoint x="285" y="835" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="285" y="953" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="data-to-e-label" value="根据结果开始下一轮研究" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacing=0;fontSize=19;fontColor=#466451;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="315" y="913" width="295" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="data-to-learning" value="取样训练" style="edgeStyle=none;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#527BA9;strokeWidth=2.5;fontSize=18;fontColor=#527BA9;labelBackgroundColor=#FFFFFF;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;dashed=1;dashPattern=6 4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="900" y="900" as="sourcePoint" />
+            <mxPoint x="900" y="835" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fleet" value="扩展：多机器人复制研究循环，通过 Git 分享方案；跨任务可传递文字经验摘要。" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=21;fontColor=#536B5A;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1045" width="1680" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="loops" value="" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;rounded=1;arcSize=12;fillColor=#F7F9F6;strokeColor=#D4DFD4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1110" width="1680" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="research-loop-title" value="研究循环｜Agent 改方案" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#245F43;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="1124" width="510" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="research-loop-body" value="按实验推进：诊断 → 改程序／训练配置 → 复验" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#536258;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="85" y="1166" width="510" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="learning-loop-title" value="学习循环｜学习器改权重" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#315E8D;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="655" y="1124" width="490" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="learning-loop-body" value="按训练批次推进：数据 → 损失 → 参数更新" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#536258;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="655" y="1166" width="490" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="execution-loop-title" value="执行循环｜机器人改物理状态" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=22;fontColor=#886420;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="1124" width="495" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="execution-loop-body" value="按控制周期推进：观测 → 动作 → 核验／恢复" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#536258;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="1166" width="495" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="source" value="教学概括｜依据 ENPIRE v2 §2 与附录 B。E／PI 是职责划分，可由同一编码 Agent 承担；两条策略路线可单独或组合使用。&lt;br&gt;数据仓库保存历史经历，学习器更新策略权重。" style="html=1;whiteSpace=wrap;fontFamily=PingFang SC,Microsoft YaHei,Helvetica,Arial;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#758078;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1224" width="1680" height="42" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
