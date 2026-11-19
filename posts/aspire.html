@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="解读 NVIDIA GEAR Lab ASPIRE（arXiv:2607.00272）：从闭环多模态排障、渐进式查阅 SKILL.md 与逐块生长 policy.py，到 BEHAVIOR-1K 抓取技能逐字解剖、仿真怪癖过滤与新场景摸索边界。">
+  <meta name="color-scheme" content="light">
+  <meta name="category" content="机器人">
+  <meta property="article:section" content="机器人">
+  <meta name="article-format" content="技术解读">
+  <title>ASPIRE：当 Coding Agent 接管机器人控制与技能演化｜阅读笔记</title>
+  <style>
+    :root {
+      --paper: #f5f3ed;
+      --white: #fffefb;
+      --ink: #233830;
+      --ink-soft: #405249;
+      --muted: #65756d;
+      --line: #d8ded5;
+      --line-strong: #bfc9bc;
+      --green: #38654f;
+      --green-dark: #294c3b;
+      --mint: #e7eee4;
+      --mint-soft: #f0f4ed;
+      --orange: #a95731;
+      --sand: #f4e9d9;
+      --code-bg: #f8f7f2;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 28px; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.85;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--green); text-underline-offset: 4px; }
+    a:hover { color: var(--green-dark); }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+    ::selection { background: #cfdec8; }
+
+    /* Top Reading Progress */
+    .progress-track {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: rgba(216, 222, 213, 0.55);
+      z-index: 90;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--green);
+      transition: width 0.08s linear;
+    }
+
+    /* Site Header */
+    .top-header {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+    }
+    .blog-home {
+      font-weight: 650;
+      text-decoration: none;
+      letter-spacing: 0.02em;
+    }
+    .blog-home:hover { text-decoration: underline; }
+    .header-meta {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    /* Hero Section */
+    .hero {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 52px 32px 40px;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      font-weight: 700;
+      color: var(--green);
+      text-transform: uppercase;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 4.6vw, 54px);
+      line-height: 1.2;
+      letter-spacing: -0.04em;
+      margin: 16px 0 20px;
+      font-weight: 740;
+      color: var(--ink);
+    }
+    .hero h1 span {
+      color: var(--green);
+    }
+    .hero-lead {
+      max-width: 820px;
+      font-size: 18px;
+      line-height: 1.85;
+      margin: 0;
+      color: var(--ink-soft);
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px 24px;
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .meta-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+    }
+    .meta-items b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .source-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .pill-link.primary {
+      background: var(--green);
+      color: var(--white);
+      border-color: var(--green);
+    }
+    .pill-link:hover {
+      border-color: var(--green);
+    }
+    .pill-link.primary:hover {
+      background: var(--green-dark);
+      color: var(--white);
+    }
+
+    /* Key Metrics Strip */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 34px;
+    }
+    .metric-cell {
+      background: var(--white);
+      padding: 20px 22px;
+      min-width: 0;
+    }
+    .metric-cell strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-cell strong.accent-orange {
+      color: var(--orange);
+    }
+    .metric-cell span {
+      display: block;
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .metric-cell small {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    /* Two-Column Reading Layout */
+    .page-layout {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 44px 32px 76px;
+      display: grid;
+      grid-template-columns: 196px minmax(0, 1fr);
+      gap: 48px;
+    }
+
+    /* Left Sticky TOC */
+    .toc-aside {
+      position: sticky;
+      top: 28px;
+      align-self: start;
+      min-width: 0;
+    }
+    .toc-heading {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin: 0 0 12px;
+    }
+    .toc-nav {
+      display: flex;
+      flex-direction: column;
+    }
+    .toc-nav a {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 8px 0 8px 14px;
+      border-left: 1px solid var(--line);
+      text-decoration: none;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+    .toc-nav a span.idx {
+      font-size: 11px;
+      color: #8b9890;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .toc-nav a:hover {
+      color: var(--green);
+      border-left-color: var(--green);
+    }
+    .toc-nav a.active {
+      color: var(--green);
+      font-weight: 700;
+      border-left: 2px solid var(--green);
+      padding-left: 13px;
+    }
+    .toc-note {
+      margin-top: 18px;
+      padding-left: 14px;
+      font-size: 11.5px;
+      line-height: 1.75;
+      color: var(--muted);
+    }
+
+    /* Main Article Column */
+    .article-body {
+      min-width: 0;
+    }
+
+    .central-verdict {
+      background: var(--mint);
+      border-top: 3px solid var(--green);
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      padding: 22px 26px;
+      margin-bottom: 12px;
+    }
+    .central-verdict .eyebrow {
+      margin-bottom: 8px;
+    }
+    .central-verdict p {
+      margin: 0;
+      font-size: 16.5px;
+      line-height: 1.85;
+      color: var(--ink);
+    }
+
+    .doc-section {
+      padding: 40px 0;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 24px;
+    }
+    .doc-section:last-of-type {
+      border-bottom: none;
+    }
+    .kicker {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--green);
+      font-weight: 700;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .doc-section h2 {
+      font-size: 27px;
+      line-height: 1.4;
+      letter-spacing: -0.03em;
+      margin: 0 0 14px;
+      color: var(--ink);
+    }
+    .sec-intro {
+      margin: 0 0 22px;
+      color: var(--ink-soft);
+      font-size: 15.5px;
+    }
+    h3 {
+      font-size: 18px;
+      line-height: 1.5;
+      margin: 22px 0 10px;
+      color: var(--ink);
+    }
+    p {
+      margin: 14px 0;
+      color: var(--ink-soft);
+    }
+    p strong, li strong {
+      color: var(--ink);
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.87em;
+      background: var(--mint-soft);
+      border: 1px solid #dce3d9;
+      color: var(--ink);
+      padding: 1px 6px;
+      border-radius: 5px;
+      overflow-wrap: anywhere;
+    }
+    pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      overflow-wrap: normal;
+    }
+
+    /* Tables */
+    .table-scroll {
+      overflow-x: auto;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      margin: 18px 0;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      text-align: left;
+    }
+    .data-table th {
+      background: var(--mint-soft);
+      color: var(--green-dark);
+      font-weight: 650;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      color: var(--ink-soft);
+      line-height: 1.72;
+    }
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+    .data-table tr.row-accent td {
+      background: #f6f9f4;
+      color: var(--ink);
+    }
+
+    /* Three-Card Grid */
+    .cards-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 22px 0;
+    }
+    .paper-card {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      min-width: 0;
+    }
+    .paper-card.top-green { border-top: 3px solid var(--green); }
+    .paper-card.top-orange { border-top: 3px solid var(--orange); }
+    .old-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+    .map-arrow {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      font-weight: 700;
+      margin: 4px 0 6px;
+    }
+    .paper-card h3 {
+      margin: 0 0 8px;
+      font-size: 16.5px;
+    }
+    .paper-card p {
+      margin: 0;
+      font-size: 13.8px;
+      line-height: 1.75;
+    }
+    .clean-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--ink-soft);
+      font-size: 14px;
+    }
+    .clean-list li {
+      margin: 6px 0;
+      line-height: 1.75;
+    }
+
+    /* Zoomable Architecture SVG Figure */
+    .arch-figure {
+      margin: 22px 0;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px 14px;
+    }
+    .zoom-btn {
+      display: block;
+      width: 100%;
+      padding: 0;
+      border: none;
+      background: transparent;
+      text-align: left;
+    }
+    .svg-scroll {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+    .arch-caption {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .zoom-hint {
+      color: var(--green);
+      font-weight: 600;
+    }
+
+    /* Modal Lightbox for Diagram Zoom */
+    .zoom-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(35, 56, 48, 0.72);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .zoom-modal[hidden] { display: none; }
+    .zoom-modal-inner {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      max-width: 1120px;
+      width: 100%;
+      max-height: 90vh;
+      overflow: auto;
+      padding: 22px 24px;
+    }
+    .zoom-modal-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .btn-subtle {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .btn-subtle:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* Interactive Box Shell */
+    .interactive-card {
+      margin: 26px 0 8px;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .interactive-top {
+      padding: 15px 20px;
+      background: var(--mint-soft);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .interactive-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .interactive-tag {
+      font-size: 12px;
+      color: var(--orange);
+      font-weight: 600;
+    }
+
+    /* Component A: Runtime Stepper */
+    .step-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-bottom: 1px solid var(--line);
+      background: var(--paper);
+    }
+    .step-tab {
+      border: none;
+      border-right: 1px solid var(--line);
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      padding: 12px 14px;
+      text-align: left;
+      color: var(--muted);
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .step-tab:last-child { border-right: none; }
+    .step-tab:hover { background: var(--white); color: var(--ink); }
+    .step-tab[aria-selected="true"] {
+      background: var(--white);
+      color: var(--ink);
+      border-bottom-color: var(--green);
+    }
+    .step-tab small {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--green);
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .step-tab strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .stepper-split {
+      display: grid;
+      grid-template-columns: 1fr 1.12fr;
+    }
+    .stepper-explain {
+      padding: 20px 22px;
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+    .stepper-code-pane {
+      padding: 18px 20px;
+      background: var(--code-bg);
+      min-width: 0;
+      overflow-x: auto;
+    }
+    .code-caption-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--muted);
+      padding-bottom: 9px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    pre.code-block {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 12.6px;
+      line-height: 1.65;
+      color: var(--ink);
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    /* Status Badges */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+    .badge.green {
+      background: var(--mint);
+      color: var(--green-dark);
+    }
+    .badge.orange {
+      background: var(--sand);
+      color: var(--orange);
+    }
+
+    /* Chapter 03: Benchmarks */
+    .two-panel {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .meter-item {
+      margin-bottom: 16px;
+    }
+    .meter-item:last-child { margin-bottom: 0; }
+    .meter-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13.5px;
+      margin-bottom: 6px;
+    }
+    .meter-head strong { color: var(--ink); }
+    .meter-head span {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--green);
+      white-space: nowrap;
+    }
+    .meter-head span.orange-txt { color: var(--orange); }
+    .meter-rail {
+      height: 8px;
+      background: #e6ebe2;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .meter-bar {
+      height: 100%;
+      background: var(--green);
+      border-radius: 999px;
+    }
+    .meter-bar.orange-bar { background: var(--orange); }
+    .meter-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Component B: Skill Inspector */
+    .inspector-bar {
+      padding: 14px 20px;
+      background: var(--mint-soft);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .copy-action-btn {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--green);
+      background: var(--white);
+      color: var(--green);
+      font-size: 12.5px;
+      font-weight: 650;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .copy-action-btn:hover {
+      background: var(--green);
+      color: var(--white);
+    }
+    .mode-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 16px;
+      background: var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+    .mode-tab {
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 8px;
+      padding: 7px 13px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .mode-tab:hover {
+      color: var(--ink);
+      background: rgba(255, 254, 251, 0.65);
+    }
+    .mode-tab[aria-selected="true"] {
+      background: var(--white);
+      color: var(--green);
+      border-color: var(--line);
+      box-shadow: 0 1px 3px rgba(35, 56, 48, 0.06);
+    }
+    .skill-pane {
+      padding: 22px;
+    }
+    .skill-pane[hidden] { display: none; }
+
+    .pattern-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      background: var(--white);
+    }
+    .pattern-card:last-child { margin-bottom: 0; }
+    .pattern-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .pattern-card-head h4 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--ink);
+    }
+    .mini-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin: 12px 0 6px;
+    }
+    .code-box {
+      margin: 10px 0;
+      padding: 14px 16px;
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .verbatim-pre {
+      margin: 0;
+      padding: 18px 20px;
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      max-height: 640px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.68;
+      color: var(--ink);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Bilingual Side-by-Side */
+    .bi-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .bi-pair:last-child { margin-bottom: 0; }
+    .bi-box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 15px 17px;
+      background: var(--white);
+      min-width: 0;
+    }
+    .bi-box.zh { background: #fafbf8; }
+    .bi-tag {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    /* X-Ray Dual Columns */
+    .xray-lead {
+      background: var(--mint-soft);
+      border-left: 3px solid var(--green);
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+    .xray-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .xray-col {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 18px;
+      background: var(--white);
+      min-width: 0;
+    }
+    .xray-col.quirk {
+      background: #fdfaf5;
+      border-top: 3px solid var(--orange);
+    }
+    .xray-col.law {
+      background: #f8fbf7;
+      border-top: 3px solid var(--green);
+    }
+    .xray-entry {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 13.6px;
+      color: var(--ink-soft);
+    }
+    .xray-entry:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .xray-entry strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 3px;
+    }
+
+    /* Component C: Generalization Gradient */
+    .tier-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 14px;
+    }
+    .tier-btn {
+      text-align: left;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink-soft);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .tier-btn:hover { border-color: var(--green); }
+    .tier-btn[aria-selected="true"] {
+      background: var(--mint);
+      border-color: var(--green);
+      color: var(--ink);
+    }
+    .tier-btn[data-tier="3"][aria-selected="true"] {
+      background: var(--sand);
+      border-color: var(--orange);
+    }
+    .tier-btn small {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+    .tier-btn[data-tier="3"] small { color: var(--orange); }
+    .tier-btn strong {
+      display: block;
+      font-size: 14.5px;
+      color: var(--ink);
+    }
+    .tier-output {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 20px 22px;
+      margin-bottom: 22px;
+    }
+    .note-quote {
+      border-left: 3px solid var(--green);
+      padding: 4px 0 4px 18px;
+      margin: 18px 0;
+      color: var(--ink);
+      font-size: 16px;
+    }
+
+    /* Sources & Footer */
+    .sources-list {
+      padding-left: 20px;
+      font-size: 13.8px;
+      color: var(--ink-soft);
+    }
+    .sources-list li {
+      margin: 8px 0;
+      overflow-wrap: anywhere;
+    }
+    .page-footer {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 24px 32px 40px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Responsive Breakpoints (Zero Horizontal Overflow) */
+    @media (max-width: 880px) {
+      .page-layout {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 26px 20px 56px;
+        gap: 22px;
+      }
+      .toc-aside {
+        position: static;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 12px;
+      }
+      .toc-heading, .toc-note { display: none; }
+      .toc-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 10px;
+        max-width: 100%;
+      }
+      .toc-nav a, .toc-nav a.active {
+        white-space: nowrap;
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        padding: 6px 4px;
+      }
+      .toc-nav a.active {
+        border-bottom-color: var(--green);
+      }
+      .top-header, .hero, .page-footer {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .cards-3, .two-panel, .stepper-split, .bi-pair, .xray-cols, .tier-buttons {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .stepper-explain {
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+      }
+      .step-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .step-tab:nth-child(2) { border-right: none; }
+      .step-tab:nth-child(1), .step-tab:nth-child(2) { border-bottom: 1px solid var(--line); }
+    }
+
+    @media (max-width: 540px) {
+      body { font-size: 15px; }
+      .top-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .hero { padding-top: 34px; padding-bottom: 30px; }
+      .hero-lead { font-size: 16px; }
+      .metrics-grid { grid-template-columns: minmax(0, 1fr); }
+      .doc-section { padding: 30px 0; }
+      .doc-section h2 { font-size: 23px; }
+      .skill-pane, .stepper-explain, .stepper-code-pane { padding: 16px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      * { transition: none !important; }
+    }
+
+    @media print {
+      body { background: #ffffff; color: #17291f; font-size: 11pt; }
+      .progress-track, .toc-aside, .mode-tabs, .copy-action-btn, .zoom-hint, #printPageBtn { display: none !important; }
+      .page-layout, .hero, .top-header, .page-footer { max-width: none; padding-left: 0; padding-right: 0; display: block; }
+      .skill-pane[hidden] { display: block !important; margin-top: 16px; border-top: 1px solid #ccc; }
+      .paper-card, .pattern-card, .interactive-card { break-inside: avoid; }
+    }
+  </style>
+
+<link rel="canonical" href="https://mystatic.github.io/posts/aspire.html">
+</head>
+<body>
+  <div class="progress-track" aria-hidden="true">
+    <div class="progress-bar" id="readingProgress"></div>
+  </div>
+
+  <header class="top-header">
+    <a class="blog-home" href="https://mystatic.github.io/">← 阅读笔记首页</a>
+    <span class="header-meta">机器人 · 技术解读 · Code-as-Policy 与持续技能发现</span>
+  </header>
+
+  <section class="hero" aria-labelledby="article-title">
+    <div class="eyebrow">机器人 / 技术解读 · NVIDIA GEAR Lab</div>
+    <h1 id="article-title">ASPIRE：<span>当 Coding Agent 接管机器人控制与技能演化</span></h1>
+    <p class="hero-lead">
+      不靠梯度下降更新神经网络权重，而是让代码大模型在多模态执行轨迹反馈下自主编写、调试并演化机器人控制程序（<code>policy.py</code>），再将排障经验蒸馏为可跨任务、跨本体复用的结构化技能库（<code>SKILL.md</code>）。
+    </p>
+
+    <div class="meta-row">
+      <div class="meta-items">
+        <span>论文 <b>arXiv:2607.00272</b></span>
+        <span>总结整理 <b>2026.11.19</b></span>
+        <span>约 15–20 分钟 · 3 组交互与技能原文对照</span>
+      </div>
+      <div class="source-pills">
+        <a class="pill-link primary" href="https://research.nvidia.com/labs/gear/aspire/" target="_blank" rel="noopener noreferrer">官方项目主页 ↗</a>
+        <a class="pill-link" href="https://arxiv.org/abs/2607.00272" target="_blank" rel="noopener noreferrer">论文原文 ↗</a>
+        <a class="pill-link" href="https://github.com/NVlabs/ASPIRE" target="_blank" rel="noopener noreferrer">NVlabs/ASPIRE ↗</a>
+      </div>
+    </div>
+
+    <div class="metrics-grid" aria-label="论文报告的关键结果指标">
+      <div class="metric-cell">
+        <strong>+77%</strong>
+        <span>LIBERO-Pro 抗扰动操作</span>
+        <small>相比基线最高提升；80 项任务平均成功率最高约 99%</small>
+      </div>
+      <div class="metric-cell">
+        <strong>+72%</strong>
+        <span>Robosuite 双臂交接</span>
+        <small>在双机械臂姿态协调与避障任务上从 20% 提升至 92%</small>
+      </div>
+      <div class="metric-cell">
+        <strong class="accent-orange">31% vs 4%</strong>
+        <span>Zero-Shot 长程任务泛化</span>
+        <small>LIBERO-Pro Long 禁止现场试错下挂载历史技能库对比基线</small>
+      </div>
+      <div class="metric-cell">
+        <strong>~10× 节省</strong>
+        <span>Sim-to-Real 推理 Token</span>
+        <small>仿真沉淀技能作为上下文参考迁移至真实机械臂抓汽水罐</small>
+      </div>
+    </div>
+  </section>
+
+  <div class="page-layout">
+    <aside class="toc-aside" aria-label="文章阅读目录">
+      <p class="toc-heading">On This Page</p>
+      <nav class="toc-nav" id="tocNav">
+        <a href="#paradigm" class="active"><span class="idx">01</span><span>范式重构：非梯度训练</span></a>
+        <a href="#runtime"><span class="idx">02</span><span>三大支柱与实操工程流</span></a>
+        <a href="#benchmarks"><span class="idx">03</span><span>评测全景与真机解魔方</span></a>
+        <a href="#skill-anatomy"><span class="idx">04</span><span>Grasping Skill 全解剖</span></a>
+        <a href="#boundaries"><span class="idx">05</span><span>新场景泛化与落地边界</span></a>
+        <a href="#sources"><span class="idx">06</span><span>证据边界与参考资料</span></a>
+      </nav>
+      <p class="toc-note">正文、架构图与三组交互均内置于页面；点击外部参考链接时需联网。</p>
+    </aside>
+
+    <article class="article-body" id="content">
+      <div class="central-verdict">
+        <div class="eyebrow">核心判断</div>
+        <p>
+          <strong>ASPIRE 的实质，是把前沿 Coding Agent 组织成“上岗前自主踩坑调机的机器人系统工程师”。</strong>它用模块化视觉与运动规划工具链替代端到端黑盒试错，用可读可筛选的 Markdown 技能文档替代易遗忘的网络权重更新，在固定工站与多步几何编排任务上极具实用价值，但面对陌生环境的首次零容错交互仍受限于试错编译成本与物理复位条件。
+        </p>
+      </div>
+
+      <!-- ==================== 01 PARADIGM ==================== -->
+      <section class="doc-section" id="paradigm">
+        <span class="kicker">01 / PARADIGM SHIFT</span>
+        <h2>范式重构：为什么不用梯度下降“训练”机器人？</h2>
+        <p class="sec-intro">
+          这篇工作（<em>ASPIRE: Agentic Skill Programming through Iterative Robot Exploration</em>，论文亦题为 <em>ASPIRE: Agentic Skills Discovery for Robotics</em>）由 NVIDIA GEAR Lab（Jim Fan、Yuke Zhu、Guanzhi Wang 等领衔）联合密歇根大学、UIUC、UC Berkeley 与 CMU 发布。它直面过去机器人学习两条主流路线的各自痛点：
+        </p>
+
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>技术路线</th>
+                <th>知识存储载体</th>
+                <th>执行失败时的诊断与修复</th>
+                <th>跨任务 / 跨本体迁移瓶颈</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>端到端 VLA / 强化学习</strong><br><span style="font-size:12px;color:var(--muted)">如 OpenVLA、π₀、大规模仿真 RL</span></td>
+                <td>神经网络浮点数权重矩阵（黑盒）</td>
+                <td>依赖标量奖励或重新采集演示微调；遇到遮挡或局部扰动难以定点打补丁</td>
+                <td>强耦合特定相机视角、关节维度与仿真摩擦参数，持续学习易产生灾难性遗忘</td>
+              </tr>
+              <tr>
+                <td><strong>早期静态 Code-as-Policies</strong><br><span style="font-size:12px;color:var(--muted)">开环一次性生成脚本</span></td>
+                <td>单任务临时生成的 Python 控制脚本</td>
+                <td>通常只有粗糙的成功/失败二元反馈，Agent 看不清是感知框偏了、IK 无解还是中途滑落</td>
+                <td>缺乏结构化持久记忆，每次换新任务都要从零重新踩相同的几何与规划坑</td>
+              </tr>
+              <tr class="row-accent">
+                <td><strong style="color:var(--green)">ASPIRE（闭环技能演化）</strong><br><span style="font-size:12px;color:var(--muted)">Coding Agent + 多模态轨迹反馈</span></td>
+                <td>可审查的 <code>policy.py</code> + 持续扩张的 <code>SKILL.md</code> 技能库</td>
+                <td>暴露视觉分割叠加图、候选抓取点、轨迹关键帧与精确碰撞报错，定位原语级根因闭环修复</td>
+                <td>将经验蒸馏为文本规范（故障特征 + 适用守卫 + 修复骨架），跨硬件与 API 零样本继承</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>在官方代码仓库 <code>NVlabs/ASPIRE</code> 中，作者提出了一组清晰的“非梯度训练”概念重映射：</p>
+
+        <div class="cards-3">
+          <div class="paper-card top-green">
+            <div class="old-label">传统：反向传播与梯度下降</div>
+            <div class="map-arrow">Training 重映射 →</div>
+            <h3>技能迭代精炼 (Skill Refinement)</h3>
+            <p>不再计算损失函数梯度，而是通过“执行程序 → 检查多模态故障轨迹 → 修补代码 → 验证蒸馏”的工程闭环改进策略。</p>
+          </div>
+          <div class="paper-card top-green">
+            <div class="old-label">传统：浮点数权重矩阵</div>
+            <div class="map-arrow">Trained Model 重映射 →</div>
+            <h3>感知运动技能仓库 (Skill Repo)</h3>
+            <p>训练产出的核心资产是一套可读、可人工审阅、永不遗忘的 Markdown 技能库与工具调用范式。</p>
+          </div>
+          <div class="paper-card top-green">
+            <div class="old-label">传统：多卡切分数据 Minibatch</div>
+            <div class="map-arrow">Distributed 重映射 →</div>
+            <h3>多 Agent 并行探索演化</h3>
+            <p>多个 Coding Agent 并发在不同随机种子与子任务分支上编写、调试并交叉演化候选控制策略。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 02 ARCHITECTURE & RUNTIME ==================== -->
+      <section class="doc-section" id="runtime">
+        <span class="kicker">02 / ARCHITECTURE &amp; RUNTIME WORKFLOW</span>
+        <h2>三大技术支柱与实操工程流：怎么查 Skill、怎么长出完整代码？</h2>
+        <p class="sec-intro">
+          实操时，ASPIRE 并非把所有技能一股脑塞进上下文后盲写出几百行终版代码，而是由<strong>闭环执行引擎、可扩展技能库、演化程序搜索</strong>协同驱动，采用<strong>渐进式目录查阅</strong>与<strong>逐块生长（Block-by-Block Growth）</strong>完成 <code>policy.py</code> 构建。
+        </p>
+
+        <figure class="arch-figure">
+          <button type="button" class="zoom-btn" id="openArchZoom" aria-label="点击放大查看 ASPIRE 闭环架构图">
+            <div class="svg-scroll">
+              <svg id="aspireArchSvg" viewBox="0 0 920 182" style="width:100%;height:auto;display:block" role="img" aria-label="ASPIRE 三大核心支柱与多模态闭环数据流">
+                <defs>
+                  <marker id="mkGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#38654f" />
+                  </marker>
+                  <marker id="mkOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#a95731" />
+                  </marker>
+                </defs>
+                <!-- Box 1: Skill Library -->
+                <rect x="12" y="24" width="202" height="122" rx="10" fill="#fffefb" stroke="#38654f" stroke-width="1.6" />
+                <text x="26" y="48" fill="#38654f" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 02 · SKILL LIBRARY</text>
+                <text x="26" y="70" fill="#233830" font-size="13.5" font-weight="bold">可复用技能库 (SKILL.md)</text>
+                <text x="26" y="92" fill="#405249" font-size="11.5">• 故障特征 Failure Signature</text>
+                <text x="26" y="111" fill="#405249" font-size="11.5">• 适用守卫 When-to-Apply</text>
+                <text x="26" y="130" fill="#405249" font-size="11.5">• 修复骨架 Repair Sketches</text>
+
+                <!-- Arrow 1 -> 2 -->
+                <line x1="214" y1="64" x2="274" y2="64" stroke="#38654f" stroke-width="1.8" marker-end="url(#mkGreen)" />
+                <text x="220" y="55" fill="#38654f" font-size="10.5">按需检索</text>
+
+                <!-- Box 2: Agent + EvoSearch -->
+                <rect x="278" y="24" width="238" height="122" rx="10" fill="#e7eee4" stroke="#38654f" stroke-width="1.6" />
+                <text x="294" y="48" fill="#38654f" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 03 · AGENT + EVOSEARCH</text>
+                <text x="294" y="70" fill="#233830" font-size="13.5" font-weight="bold">Coding Agent 演化编程</text>
+                <text x="294" y="92" fill="#233830" font-size="11.5">• 逐块生长 policy.py (# Block N)</text>
+                <text x="294" y="111" fill="#233830" font-size="11.5">• 并行变异探索多条候选策略</text>
+                <text x="294" y="130" fill="#233830" font-size="11.5">• 诊断轨迹并合成修复补丁</text>
+
+                <!-- Arrow 2 -> 3 -->
+                <line x1="516" y1="64" x2="580" y2="64" stroke="#38654f" stroke-width="1.8" marker-end="url(#mkGreen)" />
+                <text x="521" y="55" fill="#38654f" font-size="10.5">调用原语 API</text>
+
+                <!-- Box 3: Execution Engine -->
+                <rect x="584" y="24" width="324" height="122" rx="10" fill="#fffefb" stroke="#bfc9bc" stroke-width="1.6" />
+                <text x="600" y="48" fill="#a95731" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 01 · CLOSED-LOOP ENGINE</text>
+                <text x="600" y="70" fill="#233830" font-size="13.5" font-weight="bold">闭环多模态机器人执行引擎</text>
+                <text x="600" y="92" fill="#405249" font-size="11.5">• 模块工具链：SAM3 分割 / AnyGrasp / cuRobo</text>
+                <text x="600" y="111" fill="#405249" font-size="11.5">• 权限隔离：禁止读取仿真器特权真值坐标作弊</text>
+                <text x="600" y="130" fill="#a95731" font-size="11.5">• 暴露：视觉 Overlay + 抓取分布 + 碰撞规划报错</text>
+
+                <!-- Feedback 3 -> 2 -->
+                <path d="M 746 146 L 746 168 L 397 168 L 397 148" fill="none" stroke="#a95731" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#mkOrange)" />
+                <text x="478" y="163" fill="#a95731" font-size="10.5">细粒度多模态执行轨迹反馈 (Multimodal Execution Traces)</text>
+
+                <!-- Distill 2 -> 1 -->
+                <line x1="278" y1="112" x2="218" y2="112" stroke="#38654f" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#mkGreen)" />
+                <text x="219" y="128" fill="#38654f" font-size="10">验证后蒸馏</text>
+              </svg>
+            </div>
+          </button>
+          <figcaption class="arch-caption">
+            <span>依据论文 §3 与 <code>NVlabs/ASPIRE</code> 仓库整理的闭环机制示意（教学重绘）</span>
+            <span class="zoom-hint">点击架构图可放大查看 ↗</span>
+          </figcaption>
+        </figure>
+
+        <!-- Interactive Component 1: Runtime Stepper -->
+        <div class="interactive-card">
+          <div class="interactive-top">
+            <span class="interactive-title">交互一 · 实操流程拆解：从查阅 Skill 到生成完整 <code>policy.py</code></span>
+            <span class="interactive-tag">点击 4 个阶段切换工程视图</span>
+          </div>
+
+          <div class="step-bar" id="runtimeStepTabs" role="tablist" aria-label="ASPIRE 实操四阶段">
+            <button class="step-tab" type="button" role="tab" aria-selected="true" data-step="0">
+              <small>STAGE 01</small>
+              <strong>渐进式目录路由</strong>
+            </button>
+            <button class="step-tab" type="button" role="tab" aria-selected="false" data-step="1">
+              <small>STAGE 02</small>
+              <strong>生长 # Code block 1</strong>
+            </button>
+            <button class="step-tab" type="button" role="tab" aria-selected="false" data-step="2">
+              <small>STAGE 03</small>
+              <strong>查抓取 Skill 追加块</strong>
+            </button>
+            <button class="step-tab" type="button" role="tab" aria-selected="false" data-step="3">
+              <small>STAGE 04</small>
+              <strong>部署复跑 vs 跨任务沉淀</strong>
+            </button>
+          </div>
+
+          <div class="stepper-split">
+            <div class="stepper-explain" id="runtimeLeftPane" aria-live="polite"></div>
+            <div class="stepper-code-pane">
+              <div class="code-caption-bar">
+                <span id="runtimeTermTitle">skills_index → Progressive Disclosure</span>
+                <span>Python / Agent Trace</span>
+              </div>
+              <pre class="code-block"><code id="runtimeCodePane"></code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 03 BENCHMARKS & REAL ROBOT ==================== -->
+      <section class="doc-section" id="benchmarks">
+        <span class="kicker">03 / BENCHMARKS &amp; SIM-TO-REAL</span>
+        <h2>评测基准全景与真机双臂还原魔方</h2>
+        <p class="sec-intro">
+          论文在主流操作仿真基准与真实物理双臂平台上评估了系统表现。需要区分两类实验：一类允许在目标任务内闭环试错精炼程序，另一类严格考察不许现场试错的零样本跨任务迁移。
+        </p>
+
+        <div class="two-panel">
+          <div class="paper-card">
+            <h3 style="margin-top:0">论文报告的核心仿真指标</h3>
+
+            <div class="meter-item">
+              <div class="meter-head">
+                <strong>LIBERO-Pro（80 项受扰动操作）</strong>
+                <span>最高 +77%（平均 ~99%）</span>
+              </div>
+              <div class="meter-rail"><div class="meter-bar" style="width:99%"></div></div>
+              <div class="meter-note">涵盖 Goal / Object / Spatial / Long 子集，在物理位置与空间扰动下具备强自适应性</div>
+            </div>
+
+            <div class="meter-item">
+              <div class="meter-head">
+                <strong>Robosuite（Bimanual Handover 双臂交接）</strong>
+                <span>最高 +72%（20% → 92%）</span>
+              </div>
+              <div class="meter-rail"><div class="meter-bar" style="width:92%"></div></div>
+              <div class="meter-note">通过演化搜索与轨迹排障解决双机械臂空间交接姿态冲突</div>
+            </div>
+
+            <div class="meter-item">
+              <div class="meter-head">
+                <strong>BEHAVIOR-1K（R1 Pro 长程家庭移动操作）</strong>
+                <span>最高 +32%</span>
+              </div>
+              <div class="meter-rail"><div class="meter-bar" style="width:76%"></div></div>
+              <div class="meter-note">程序化家庭场景中协同全向底盘、躯干俯仰与双 7-DoF 机械臂</div>
+            </div>
+
+            <div class="meter-item">
+              <div class="meter-head">
+                <strong>LIBERO-Pro Long（未见任务 Zero-Shot 泛化）</strong>
+                <span class="orange-txt">31% vs 基线 4%</span>
+              </div>
+              <div class="meter-rail"><div class="meter-bar orange-bar" style="width:31%"></div></div>
+              <div class="meter-note">纯零样本下继承历史技能库成功率翻近 8 倍，但距离生产级可靠度仍需少量在线迭代</div>
+            </div>
+          </div>
+
+          <div class="paper-card">
+            <span class="badge green">Sim-to-Real 与真机闭环</span>
+            <h3>跨本体迁移与在线还原魔方</h3>
+            <p style="font-size:14px">
+              由于技能库保存的是<strong>语义与几何层面的操作规范</strong>而非绑定特定仿真器的网络权重，仿真积累的技能可直接挂载至真实双臂 <strong>YAM 工作站</strong>（搭配 <code>SAM3</code> 感知服务与 <code>cuRobo</code> 规划服务）：
+            </p>
+            <ul class="clean-list">
+              <li><strong>真机调试加速：</strong>在真实机器人抓汽水罐（soda-can lifting）等任务上，挂载仿真技能库使推理 Token 消耗减少约 <strong>10 倍</strong>，显著降低真机试错轮次。</li>
+              <li><strong>真机双臂还原魔方（Rubik's Cube）：</strong>不完全依赖仿真，系统同样支持在真实双臂平台上直接运行在线探索闭环，自主修补柔性夹爪打滑、视角遮挡与交接旋转偏差，执行效率随交互轮次递进提升。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 04 SKILL ANATOMY ==================== -->
+      <section class="doc-section" id="skill-anatomy">
+        <span class="kicker">04 / REAL SKILL CASE STUDY</span>
+        <h2>技能样本全解剖：<code>BEHAVIOR-1K / Grasping Patterns</code></h2>
+        <p class="sec-intro">
+          下面完整提取自官方项目页公开的技能库条目 <code>behavior-grasping</code>（仓库对应路径 <code>aspire/sim/.claude/behavior/skills/grasping.md</code>）。这份样本非常直观地展示了 ASPIRE 在仿真里究竟学到了什么，以及为什么其中既有“仿真器工程补丁”，又有“可迁移上真机的几何规律”。
+        </p>
+
+        <!-- Interactive Component 2: 4-Mode Skill Inspector -->
+        <div class="interactive-card">
+          <div class="inspector-bar">
+            <div>
+              <span class="badge green">BEHAVIOR-1K</span>
+              <strong style="margin-left:6px">Grasping Patterns</strong>
+              <span style="font-size:12.5px;color:var(--muted);margin-left:6px"><code>aspire/sim/.claude/behavior/skills/grasping.md</code></span>
+            </div>
+            <button type="button" class="copy-action-btn" id="copyVerbatimBtn">复制英文原样 Markdown</button>
+          </div>
+
+          <div class="mode-tabs" id="skillTabs" role="tablist" aria-label="技能文档查看模式">
+            <button type="button" class="mode-tab" role="tab" aria-selected="true" data-pane="pane-zh">中文完整精译</button>
+            <button type="button" class="mode-tab" role="tab" aria-selected="false" data-pane="pane-en">英文逐字原样 (Verbatim)</button>
+            <button type="button" class="mode-tab" role="tab" aria-selected="false" data-pane="pane-bi">中英双栏对照</button>
+            <button type="button" class="mode-tab" role="tab" aria-selected="false" data-pane="pane-xray">仿真怪癖 vs 真机规律透视</button>
+          </div>
+
+          <!-- Pane 1: Full Chinese Translation -->
+          <div class="skill-pane" id="pane-zh" role="tabpanel">
+            <div class="note-quote" style="margin-top:0;font-size:14.5px">
+              <strong>卡片触发说明：</strong>使用 R1 Pro 机器人抓取物体的设计模式。在编写或调试 <code>BEHAVIOR-1K</code> 任务中的抓取序列时应用。<br>
+              <span style="font-size:12.5px;color:var(--muted)">原文：Patterns for grasping objects with the R1 Pro robot. Apply when writing or debugging grasp sequences in BEHAVIOR-1K tasks.</span>
+            </div>
+
+            <div class="pattern-card">
+              <div class="pattern-card-head">
+                <h4>模式 1：<code>move_hand</code> 与 <code>grasp_object</code> 的权衡选择</h4>
+                <span class="badge green">Pattern 1</span>
+              </div>
+              <div class="mini-label">问题描述与适用时机</div>
+              <ul class="clean-list">
+                <li><code>move_hand(pose, arm)</code> —— 速度快、耗时可预期，但在贴近地面处的机械臂可达范围受限。</li>
+                <li><code>grasp_object(pregrasp, grasp, name, arm)</code> —— 速度较慢，底层调用 <code>cuRobo</code> 逆运动学（IK）与运动规划器，可达范围更好，但存在卡死（Hang）风险。</li>
+                <li><strong>适用时机：</strong>在调用 <code>sample_grasp_pose</code> 获得候选位姿后决定如何执行抓取时，始终应用。</li>
+              </ul>
+
+              <div class="mini-label">决策矩阵 (Decision Matrix)</div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>场景</th><th>优先使用</th><th>备选回退 (Fallback)</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>地面物体（<code>z &lt; 0.1m</code>），距离 ≤0.45m</td><td><code>grasp_object</code></td><td><code>move_hand</code></td></tr>
+                    <tr><td>地面物体，距离 0.5–0.6m</td><td><code>move_hand</code></td><td><code>grasp_object</code></td></tr>
+                    <tr><td>桌面 / 货架物体</td><td><code>move_hand</code></td><td><code>grasp_object</code></td></tr>
+                    <tr><td>剩余时间预算 &lt; 200s</td><td>仅用 <code>move_hand</code></td><td>—</td></tr>
+                    <tr><td>剩余时间预算 &gt; 400s</td><td>依次串行使用两者</td><td>—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mini-label">耗时实测数据（汽水罐 Soda 任务）</div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>方法</th><th>典型耗时</th><th>最坏情况</th><th>卡死风险</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><code>move_hand</code>（预抓取 + 抓取）</td><td>80–130s</td><td>200s</td><td>无 (None)</td></tr>
+                    <tr><td><code>grasp_object</code></td><td>150–265s</td><td><strong style="color:var(--orange)">619s+（卡死）</strong></td><td><strong>有 (Yes)</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mini-label">代码模板：按位姿交错执行 (Interleaved Per-Pose)</div>
+              <div class="code-box">
+                <pre class="code-block"><code>for pose_idx, (pg, g) in enumerate(zip(pregrasp_poses, grasp_poses)):
+    if success or time_left() &lt; 60:
+        break
+
+    # 优先尝试 move_hand（速度快）
+    for arm in [0, 1]:
+        if success or time_left() &lt; 60:
+            break
+        try:
+            open_gripper(arm=arm)
+            move_hand(pg, arm=arm)
+            time.sleep(0.5)
+            move_hand(g, arm=arm)
+            time.sleep(0.5)
+            close_gripper(arm=arm)
+            time.sleep(0.5)
+            lift_arm(arm=arm)
+            time.sleep(1)
+            if check_object_in_hand(arm=arm):
+                success = True
+                break
+            else:
+                open_gripper(arm=arm)
+                lift_arm(arm=arm)
+        except Exception:
+            try:
+                open_gripper(arm=arm)
+                lift_arm(arm=arm)
+            except Exception:
+                pass
+
+    # 若 move_hand 失败，立即尝试 grasp_object（切勿推迟到最后！）
+    if not success and time_left() &gt; 120:
+        for arm in [0, 1]:
+            if success or time_left() &lt; 120:
+                break
+            try:
+                open_gripper(arm=arm)
+                grasp_object(pg, g, target_object, arm=arm)
+                lift_arm(arm=arm)
+                if check_object_in_hand(arm=arm):
+                    success = True
+                    break
+                else:
+                    open_gripper(arm=arm)
+            except Exception:
+                try:
+                    open_gripper(arm=arm)
+                except Exception:
+                    pass</code></pre>
+              </div>
+
+              <div class="mini-label">关键原则与实验证据</div>
+              <p style="font-size:13.8px;margin:6px 0">
+                <strong>交错执行，切勿延后：</strong>在 v1（汽水罐）中，我们先跑完了所有位姿的 <code>move_hand</code>，把 <code>grasp_object</code> 留作最后兜底；结果 <code>move_hand</code> 耗去 789s，仅剩 61s，导致 <code>grasp_object</code> 被完全跳过。v2 改为针对每个位姿先试双臂 <code>move_hand</code>，失败后立即试双臂 <code>grasp_object</code>。
+              </p>
+              <ul class="clean-list">
+                <li>Seed 34（基线成功）：0.5m 处 <code>move_hand</code> 耗时 100s，SUCCESS；Seed 28（基线成功）：0.65m 处 <code>grasp_object</code> 耗时 220s，SUCCESS。</li>
+                <li>Seed 29（基线失败）：<code>grasp_object</code> 卡死 619s 超时；v3 修复后在 0.45m 处调用耗时 158s，SUCCESS。</li>
+              </ul>
+            </div>
+
+            <div class="pattern-card">
+              <div class="pattern-card-head">
+                <h4>模式 2：双臂遍历抓取 (Dual-Arm Grasp)</h4>
+                <span class="badge green">Pattern 2</span>
+              </div>
+              <p style="font-size:13.8px;margin:0 0 8px">
+                大模型生成的代码常固定使用单侧手臂（<code>arm=0</code> 或 <code>arm=1</code>），在当前接近角下可能够不到物体。<strong>策略：始终对每个抓取位姿遍历左右双臂。</strong>
+              </p>
+              <div class="code-box">
+                <pre class="code-block"><code>for arm in [0, 1]:
+    try:
+        open_gripper(arm=arm)
+        grasp_object(pregrasp, grasp, object_name, arm=arm)
+        lift_arm(arm=arm)
+        if check_object_in_hand(arm=arm):
+            success = True
+            break
+    except Exception:
+        open_gripper(arm=arm)</code></pre>
+              </div>
+              <ul class="clean-list">
+                <li><strong>证据：</strong>Seed 26 仅用 <code>arm=1</code> 失败；Seed 33 仅用 <code>arm=1</code> 失败（换 <code>arm=0</code> 修复）；Seed 35 仅用 <code>arm=0</code> 失败；成功基线中 Seed 32 用右臂、Seed 28 用左臂，无单一最优手臂。</li>
+                <li><strong>选臂启发式：</strong>左臂（<code>0</code>）更易够到偏左目标，右臂（<code>1</code>）更易够到偏右目标；不确定时优先尝试 <code>arm=0</code>。</li>
+              </ul>
+            </div>
+
+            <div class="pattern-card">
+              <div class="pattern-card-head">
+                <h4>模式 3：地面物体抓取 (Floor Object Grasping, <code>z &lt; 0.1m</code>)</h4>
+                <span class="badge green">Pattern 3</span>
+              </div>
+              <p style="font-size:13.8px;margin:0 0 8px">
+                地面高度物体（<code>z &lt; 0.1m</code>）最难抓：手臂须同时水平前伸并下探，大幅压缩可达工作空间。
+              </p>
+              <ul class="clean-list">
+                <li><strong>执行策略：</strong>① 底盘导航贴近至 <strong>0.45m</strong>（而非 0.5m 或 0.6m）；② 首选 <code>grasp_object</code>（cuRobo IK）；③ 采用 <strong>±90° 垂直逼近角</strong>改善手臂构型几何。</li>
+                <li><strong>为什么 <code>move_hand</code> 失败：</strong>0.6m 与 0.5m 处 <code>grasp_z=0.094</code> 均无法求解；0.5m 处虽能解出 <code>grasp_z=0.160</code>，但悬在罐顶上方 9cm 处导致抓空。Seed 29 在 0.45m 配合垂直角与 <code>grasp_object</code> 修复成功。</li>
+              </ul>
+            </div>
+
+            <div class="pattern-card">
+              <div class="pattern-card-head">
+                <h4>模式 4：抓取卡死缓解机制 (Grasp Hang Mitigation)</h4>
+                <span class="badge orange">Pattern 4</span>
+              </div>
+              <p style="font-size:13.8px;margin:0 0 8px">
+                <code>cuRobo</code> 规划器陷入僵局时，<code>grasp_object</code> 可能非确定性卡死 600s+，单次卡死即烧光预算。
+              </p>
+              <div class="code-box">
+                <pre class="code-block"><code>if time_left() &gt; 120:  # 剩余时间不足 120s 时绝不调用
+    try:
+        grasp_object(pregrasp, grasp, object_name, arm=arm)
+    except Exception as e:
+        print(f"grasp_object error: {e}")
+        open_gripper(arm=arm)  # 清理复位夹爪</code></pre>
+              </div>
+              <ul class="clean-list">
+                <li><strong>局限性：</strong>C++ 底层实现忽略 Python <code>SIGALRM</code> 信号，一旦启动无法强行中断；120s 仅为安全余量而非绝对保证（单次仍可超 300s）。</li>
+              </ul>
+            </div>
+
+            <div class="pattern-card">
+              <div class="pattern-card-head">
+                <h4>模式 5：<code>check_object_in_hand</code> 假阳性（瞬时抓稳但抬臂滑落）</h4>
+                <span class="badge orange">Pattern 5</span>
+              </div>
+              <ul class="clean-list">
+                <li><strong>现象：</strong>物体短暂夹住但在 <code>lift_arm</code> 过程中或之后滑落，<code>check_object_in_hand</code> 仍可能返回 <code>true</code>，而奖励函数要求物体仍在手中且高于初始高度（Seed 52、61 均出现返回 <code>true</code> 但 <code>reward=0</code>）。</li>
+                <li><strong>缓解：</strong>取决于夹爪摩擦与物体几何，无纯代码根治手段；若首次抓取报成功但任务未完成，应换另一组候选位姿对重试。</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Pane 2: 100% Verbatim Markdown -->
+          <div class="skill-pane" id="pane-en" role="tabpanel" hidden>
+            <p style="font-size:13px;color:var(--muted);margin-top:0">
+              以下文本与官方项目站公开的 <code>skill_library.json</code>（源路径 <code>aspire/sim/.claude/behavior/skills/grasping.md</code>，共 204 行 / 7,242 字符）逐字符完全一致：
+            </p>
+            <pre class="verbatim-pre" id="verbatimDisplay"></pre>
+          </div>
+
+          <!-- Pane 3: Side-by-Side Bilingual -->
+          <div class="skill-pane" id="pane-bi" role="tabpanel" hidden>
+            <div class="bi-pair">
+              <div class="bi-box">
+                <span class="bi-tag">EN · PATTERN 1</span>
+                <strong>move_hand vs grasp_object</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  <code>move_hand</code> is fast (80–130s, no hang risk) with limited floor reach; <code>grasp_object</code> uses cuRobo IK+motion planner with better reach (150–265s) but can hang 619s+. <strong>Interleave per-pose</strong> instead of deferring <code>grasp_object</code> until all <code>move_hand</code> attempts burn 789s.
+                </p>
+              </div>
+              <div class="bi-box zh">
+                <span class="bi-tag">ZH · 模式 1</span>
+                <strong>快慢双策略按位姿交错</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  <code>move_hand</code> 快且不卡死但贴地手短；<code>grasp_object</code> 调 cuRobo 可达性强但可能卡死 619s+。核心铁律：<strong>针对单个位姿交替尝试</strong>，切勿先跑完所有位姿的 <code>move_hand</code> 烧光 789s 导致兜底被跳过。
+                </p>
+              </div>
+            </div>
+
+            <div class="bi-pair">
+              <div class="bi-box">
+                <span class="bi-tag">EN · PATTERN 2</span>
+                <strong>Dual-Arm Grasp</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  LLM code often hardcodes a single arm. Neither arm is universally better across approach angles (Seeds 26, 33, 35). Always iterate <code>for arm in [0, 1]</code> for every grasp pose; try <code>arm=0</code> first when in doubt.
+                </p>
+              </div>
+              <div class="bi-box zh">
+                <span class="bi-tag">ZH · 模式 2</span>
+                <strong>左右双臂工作空间遍历</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  大模型常偷懒写死单臂，易受接近角限制够不到目标。没有任何一只手普适占优，必须对每个候选位姿循环尝试 <code>arm in [0, 1]</code>，不确定时先试左臂 <code>arm=0</code>。
+                </p>
+              </div>
+            </div>
+
+            <div class="bi-pair">
+              <div class="bi-box">
+                <span class="bi-tag">EN · PATTERN 3</span>
+                <strong>Floor Object Grasping (z &lt; 0.1m)</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  Horizontal extension + downward reach shrinks workspace. Navigate to <strong>0.45m</strong>, use <code>grasp_object</code> (cuRobo IK) as primary, and try <strong>±90° perpendicular angle</strong>. At 0.5m, <code>move_hand</code> only solves <code>z=0.160</code> (9cm above the can) and misses.
+                </p>
+              </div>
+              <div class="bi-box zh">
+                <span class="bi-tag">ZH · 模式 3</span>
+                <strong>地面低矮物体抓取几何</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  前伸叠加下探严重压缩可达空间。底盘需拉近至 <strong>0.45m</strong>，首选 <code>grasp_object</code> 强 IK，并采用 <strong>±90° 垂直切入角</strong>，避免简单规划器在 0.5m 处解出悬空 9cm 假位姿抓空。
+                </p>
+              </div>
+            </div>
+
+            <div class="bi-pair">
+              <div class="bi-box">
+                <span class="bi-tag">EN · PATTERN 4</span>
+                <strong>Grasp Hang Mitigation</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  <code>grasp_object</code> can non-deterministically hang 600s+ and C++ internals ignore Python <code>SIGALRM</code>. Always check <code>time_left() &gt; 120</code> and wrap in <code>try/except</code> with <code>open_gripper</code> cleanup.
+                </p>
+              </div>
+              <div class="bi-box zh">
+                <span class="bi-tag">ZH · 模式 4</span>
+                <strong>规划卡死预算守卫</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  <code>grasp_object</code> 可能非确定性卡死 600s+，且底层 C++ 忽略 <code>SIGALRM</code> 无法中断。调用前必须校验 <code>time_left() &gt; 120</code> 并包裹异常处理复位夹爪。
+                </p>
+              </div>
+            </div>
+
+            <div class="bi-pair">
+              <div class="bi-box">
+                <span class="bi-tag">EN · PATTERN 5</span>
+                <strong>check_object_in_hand False Positives</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  Momentary grasp that drops during <code>lift_arm</code> still triggers <code>true</code> while yielding <code>reward=0</code> (Seeds 52, 61). Retry with a different pose pair if task completion remains false.
+                </p>
+              </div>
+              <div class="bi-box zh">
+                <span class="bi-tag">ZH · 模式 5</span>
+                <strong>在手检测假阳性与换位姿重试</strong>
+                <p style="font-size:13.5px;margin:6px 0 0">
+                  短暂夹住但在 <code>lift_arm</code> 抬臂时滑落仍会误报在手（最终 <code>reward=0</code>）。若首次抓取报成功但任务未完成，须切换下一组抓取位姿对重新尝试。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 4: Sim Artifacts vs Real Physics X-Ray -->
+          <div class="skill-pane" id="pane-xray" role="tabpanel" hidden>
+            <div class="xray-lead">
+              <strong>为什么一份 100% 在仿真里总结出的文档，上真机不仅没崩，反而省了约 10 倍推理 Token？</strong><br>
+              如果是强化学习，下方左侧的“仿真器卡死怪癖”会同右侧的“物理几何规律”一起刻死在权重里。而在 ASPIRE 中，这份文档作为<strong>上下文参考（In-Context Guidance）</strong>提供给真机 Agent：大模型对照真机 API 文档时起到了<strong>天然语义过滤器</strong>的作用 —— 自动忽略不存在的函数名和超时数值，只提取右侧跨硬件成立的几何与状态机逻辑。
+            </div>
+
+            <div class="xray-cols">
+              <div class="xray-col quirk">
+                <span class="badge orange">仿真器工程怪癖 · Sim Artifacts（真机自动过滤）</span>
+                <div class="xray-entry">
+                  <strong>1. 单次耗时百秒与 619s+ 规划死锁（模式 1 &amp; 4）</strong>
+                  真实 GPU 上 <code>cuRobo</code> 规划通常只需几十至几百毫秒；动辄 200s 乃至卡死 619s、C++ 忽略 <code>SIGALRM</code>，源于重度家庭仿真器（OmniGibson）在点云碰撞网格重建与物理步进同步上的工程瓶颈。
+                </div>
+                <div class="xray-entry">
+                  <strong>2. 评测预算守卫 <code>time_left() &gt; 120</code>（模式 1 &amp; 4）</strong>
+                  针对仿真 Episode 限时机制设计的防御性刷榜逻辑，属于典型的评测环境适配（Harness Engineering）。
+                </div>
+                <div class="xray-entry">
+                  <strong>3. 特定随机种子与奖励判定器（全篇）</strong>
+                  <code>Seed 28/29/52</code> 及 <code>reward=0</code> 直接绑定仿真评测集配置，在真实物理世界中并不存在对应接口。
+                </div>
+              </div>
+
+              <div class="xray-col law">
+                <span class="badge green">通用几何与状态机规律 · Transferable Laws（直通真机）</span>
+                <div class="xray-entry">
+                  <strong>1. 低矮地面物体的运动学边界（模式 3）</strong>
+                  抓地面物体（<code>z &lt; 0.1m</code>）时水平前伸叠加下探会急剧压缩工作空间 —— 先拉近底盘距离（0.45m）+ 采用 ±90° 垂直切入角 + 警惕“悬空 9cm 假可达解”，在真实轮式双臂机器人上完全成立。
+                </div>
+                <div class="xray-entry">
+                  <strong>2. 左右双臂工作空间遍历（模式 2）</strong>
+                  纠正代码模型“偷懒固定写单手”的惯性，对每个候选位姿遍历双臂校验可达性，直接减少真机单侧死角失败。
+                </div>
+                <div class="xray-entry">
+                  <strong>3. 瞬时闭合 ≠ 稳定抓取（模式 5）</strong>
+                  夹爪闭合瞬间极易误判，必须在抬臂（<code>lift_arm</code>）克服重力后做二次确认；滑落时切换下一组候选抓取位姿对，而非原地重复死磕。
+                </div>
+                <div class="xray-entry">
+                  <strong>4. 单位姿快慢策略交错重试（模式 1）</strong>
+                  避免单一策略连续失败耗尽重试窗口，是稳健机器人任务状态机的通用编排模式。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 05 BOUNDARIES ==================== -->
+      <section class="doc-section" id="boundaries">
+        <span class="kicker">05 / GENERALIZATION &amp; DEPLOYMENT BOUNDARIES</span>
+        <h2>工程落地冷思考：换成新场景新任务，还得摸索一阵子吗？</h2>
+        <p class="sec-intro">
+          把 ASPIRE 放到真实工程场景中评估，“要不要重新摸索”取决于<strong>“新”到了哪一层</strong>。按照任务变化幅度，可以清晰划出三条能力边界：
+        </p>
+
+        <!-- Interactive Component 3: 3-Tier Generalization Switcher -->
+        <div class="tier-buttons" id="gradSelector" role="tablist" aria-label="新场景泛化三梯度">
+          <button type="button" class="tier-btn" role="tab" aria-selected="true" data-tier="1">
+            <small>梯度 L1 · 局部扰动</small>
+            <strong>同一任务 + 物体移位 / 新增遮挡</strong>
+          </button>
+          <button type="button" class="tier-btn" role="tab" aria-selected="false" data-tier="2">
+            <small>梯度 L2 · 任务重组</small>
+            <strong>相似场景 + 未见长程新组合</strong>
+          </button>
+          <button type="button" class="tier-btn" role="tab" aria-selected="false" data-tier="3">
+            <small>梯度 L3 · 跨界交互</small>
+            <strong>全新物理机制 / 零容错陌生现场</strong>
+          </button>
+        </div>
+
+        <div class="tier-output" id="gradDetailPanel" aria-live="polite"></div>
+
+        <div class="two-panel">
+          <div class="paper-card top-green">
+            <span class="badge green">最契合的工程定位</span>
+            <h3>柔性产线换型 &amp; 固定工站“自动驻场调机”</h3>
+            <p style="font-size:14px">
+              在工厂工站换线、实验室自动化台面、标准化桌面清理或分拣工位中，任务目标固定但每次物体位置有局部波动。<strong>这类场景允许机器人在正式投产前花 1～2 小时自己在工位上试错踩坑，把 <code>policy.py</code> 调到高成功率，随后成千上万次直接复跑脚本</strong> —— 实质上替代了昂贵的人类机器人工程师驻场写状态机的工作。
+            </p>
+          </div>
+          <div class="paper-card top-orange">
+            <span class="badge orange">当前短板与融合演进</span>
+            <h3>开放家庭零容错场景 &amp; 高频柔顺力控</h3>
+            <p style="font-size:14px">
+              若把家庭机器人第一次推进陌生厨房，要求“不许摔坏茶具、不许人工复位、第一遍就把茶泡好”，现场写代码试错便来不及了；同时穿针引线、揉面团等毫秒级连续力控也难以用离散几何 API 表达。未来更现实的方向是<strong>“上层 ASPIRE 代码演化编排 + 底层高频 VLA / RL 原子控制器”</strong>的分层融合。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 06 SOURCES & BOUNDARIES ==================== -->
+      <section class="doc-section" id="sources">
+        <span class="kicker">06 / SOURCES &amp; EVIDENCE BOUNDARY</span>
+        <h2>证据边界与一手参考资料</h2>
+        <p class="sec-intro">
+          本文区分<strong>论文与官方项目站报告结果</strong>、<strong>公开仓库工程机制</strong>与<strong>落地适用性判断</strong>：基准成功率与 Token 缩减倍数引自作者公开报告；第 04 章技能原文直接提取自官方公开技能库；第 05 章关于真机复位成本与分层融合的讨论属于工程推论，未在本地复现物理实验。
+        </p>
+
+        <ol class="sources-list">
+          <li>
+            <strong>官方项目主页与技能库数据：</strong><a href="https://research.nvidia.com/labs/gear/aspire/" target="_blank" rel="noopener noreferrer">ASPIRE: Agentic Skill Programming through Iterative Robot Exploration (NVIDIA GEAR Lab)</a>（含公开技能条目 <code>behavior-grasping</code>）。
+          </li>
+          <li>
+            <strong>论文预印本：</strong>Runyu Lu, Yubo Wu, Ethan Kou, Haotian Lin 等，<em>ASPIRE: Agentic Skills Discovery for Robotics</em>，<a href="https://arxiv.org/abs/2607.00272" target="_blank" rel="noopener noreferrer">arXiv:2607.00272</a>（2026）。
+          </li>
+          <li>
+            <strong>官方开源代码仓库：</strong><a href="https://github.com/NVlabs/ASPIRE" target="_blank" rel="noopener noreferrer">github.com/NVlabs/ASPIRE</a>（Apache-2.0 许可证，含 <code>aspire/sim/</code> 仿真评测隔离环境、<code>aspire/real/</code> 真机部署配置与 <code>.claude/skills/</code> 迭代调试工作流）。
+          </li>
+        </ol>
+
+        <div style="margin-top:20px">
+          <button type="button" class="btn-subtle" id="printPageBtn">打印 / 导出 PDF</button>
+        </div>
+      </section>
+    </article>
+  </div>
+
+  <footer class="page-footer">
+    <span>© 2026 Reading Notes · 机器人与智能系统阅读笔记</span>
+    <a href="https://mystatic.github.io/">返回阅读笔记首页 ↗</a>
+  </footer>
+
+  <!-- SVG Zoom Modal -->
+  <div class="zoom-modal" id="archZoomModal" role="dialog" aria-modal="true" aria-labelledby="zoomModalTitle" hidden>
+    <div class="zoom-modal-inner">
+      <div class="zoom-modal-bar">
+        <span id="zoomModalTitle">ASPIRE 闭环多模态执行与技能演化架构图</span>
+        <button type="button" class="btn-subtle" id="closeArchZoom">关闭放大 ✕</button>
+      </div>
+      <div id="zoomSvgMount"></div>
+    </div>
+  </div>
+
+  <!-- 100% Exact Verbatim Markdown Payload (Zero Escaping, Byte-Identical) -->
+  <script type="text/plain" id="verbatim-grasping-md">## Pattern 1: move_hand vs grasp_object
+
+### Problem
+Two grasp execution methods exist with very different tradeoffs:
+- `move_hand(pose, arm)` — fast, predictable, but limited reach near floor
+- `grasp_object(pregrasp, grasp, name, arm)` — slower, uses cuRobo IK+motion planner, better reach but can hang
+
+### When to Apply
+- Always when choosing how to execute a grasp after `sample_grasp_pose`.
+
+### Decision Matrix
+
+| Scenario | Use First | Fallback |
+|----------|-----------|----------|
+| Floor object (z < 0.1m) at ≤0.45m | grasp_object | move_hand |
+| Floor object at 0.5-0.6m | move_hand | grasp_object |
+| Table/shelf object | move_hand | grasp_object |
+| Time budget < 200s | move_hand only | — |
+| Time budget > 400s | Both in sequence | — |
+
+### Timing Data (Soda Task)
+
+| Method | Typical Duration | Worst Case | Hang Risk |
+|--------|-----------------|------------|-----------|
+| `move_hand` (pregrasp+grasp) | 80-130s | 200s | None |
+| `grasp_object` | 150-265s | **619s+ (hang)** | Yes |
+
+### Code Template: Interleaved Per-Pose
+
+```python
+for pose_idx, (pg, g) in enumerate(zip(pregrasp_poses, grasp_poses)):
+    if success or time_left() < 60:
+        break
+
+    # Try move_hand first (fast)
+    for arm in [0, 1]:
+        if success or time_left() < 60:
+            break
+        try:
+            open_gripper(arm=arm)
+            move_hand(pg, arm=arm)
+            time.sleep(0.5)
+            move_hand(g, arm=arm)
+            time.sleep(0.5)
+            close_gripper(arm=arm)
+            time.sleep(0.5)
+            lift_arm(arm=arm)
+            time.sleep(1)
+            if check_object_in_hand(arm=arm):
+                success = True
+                break
+            else:
+                open_gripper(arm=arm)
+                lift_arm(arm=arm)
+        except Exception:
+            try:
+                open_gripper(arm=arm)
+                lift_arm(arm=arm)
+            except Exception:
+                pass
+
+    # Immediately try grasp_object if move_hand failed (don't defer!)
+    if not success and time_left() > 120:
+        for arm in [0, 1]:
+            if success or time_left() < 120:
+                break
+            try:
+                open_gripper(arm=arm)
+                grasp_object(pg, g, target_object, arm=arm)
+                lift_arm(arm=arm)
+                if check_object_in_hand(arm=arm):
+                    success = True
+                    break
+                else:
+                    open_gripper(arm=arm)
+            except Exception:
+                try:
+                    open_gripper(arm=arm)
+                except Exception:
+                    pass
+```
+
+### Critical: Interleave, Don't Defer
+
+In v1 (soda), we tried ALL move_hand attempts first, then grasp_object as final fallback. Result: move_hand burned 789s, only 61s left — grasp_object skipped entirely.
+
+In v2, we interleave: per-pose, try move_hand (both arms), then immediately grasp_object (both arms). This ensures each method gets a chance while time permits.
+
+### Evidence
+- Seed 34 (baseline success): `move_hand` at 0.5m distance — took 100s total, SUCCESS
+- Seed 28 (baseline success): `grasp_object` at 0.65m — took 220s, SUCCESS
+- Seed 29 (baseline fail): `grasp_object` — **hung 619s**, TIMEOUT
+- Seed 29 (v3 fix): `grasp_object` at 0.45m — took 158s, SUCCESS
+
+---
+
+## Pattern 2: Dual-Arm Grasp
+
+### Problem
+LLM-generated code often uses a single arm (arm=0 or arm=1). The chosen arm may not reach the object from the current approach angle.
+
+### When to Apply
+- Always. Try both arms for every grasp pose.
+
+### Strategy
+
+```python
+for arm in [0, 1]:
+    try:
+        open_gripper(arm=arm)
+        grasp_object(pregrasp, grasp, object_name, arm=arm)
+        lift_arm(arm=arm)
+        if check_object_in_hand(arm=arm):
+            success = True
+            break
+    except Exception:
+        open_gripper(arm=arm)
+```
+
+### Evidence
+- Seed 26 baseline: arm=1 only → FAIL
+- Seed 33 baseline: arm=1 only → FAIL (fixed with arm=0)
+- Seed 35 baseline: arm=0 only → FAIL
+- Baseline successes: seed 32 used arm=1, seed 28 used arm=0 — neither arm is universally better.
+
+### Arm Selection Heuristic
+- arm=0 (left) tends to reach objects slightly to the robot's left
+- arm=1 (right) tends to reach objects slightly to the robot's right
+- When in doubt, try arm=0 first (slightly more success in our data)
+
+---
+
+## Pattern 3: Floor Object Grasping
+
+### Problem
+Floor-level objects (z < 0.1m) are the hardest to grasp. The arm must extend horizontally AND reach down, which limits the reachable workspace.
+
+### When to Apply
+- Object z-position < 0.1m (from `get_object_pose`)
+
+### Strategy
+1. Navigate to **0.45m** (not 0.5m or 0.6m)
+2. Use **grasp_object** (cuRobo IK) as primary method — it can solve harder IK problems than move_hand
+3. Try from **perpendicular approach angle** (±90°) — may provide better arm geometry
+
+### Why move_hand Fails on Floor Objects
+`move_hand` uses a simpler motion planner that can't always solve the IK for floor-level poses:
+- At 0.6m: move_hand(grasp_z=0.094) → `success=false` (can't reach)
+- At 0.5m: move_hand(grasp_z=0.094) → `success=false` still
+- At 0.5m: move_hand(grasp_z=0.160) → `success=true` but z=0.16 is 9cm ABOVE the can → misses
+
+`grasp_object` uses cuRobo which has a more capable IK solver and motion planner.
+
+### Evidence
+- Seed 29: move_hand failed at every distance. grasp_object at 0.45m from perpendicular angle → SUCCESS.
+- Seed 34 (baseline): move_hand worked at ~0.5m — but this seed had a more favorable approach geometry.
+
+---
+
+## Pattern 4: Grasp Hang Mitigation
+
+### Problem
+`grasp_object` can hang for 600+ seconds when the cuRobo motion planner gets stuck. A single hung call burns the entire time budget.
+
+### When to Apply
+- Always wrap `grasp_object` in try/except
+- Always check time budget before calling
+
+### Strategy
+
+```python
+if time_left() > 120:  # never call with < 120s remaining
+    try:
+        grasp_object(pregrasp, grasp, object_name, arm=arm)
+    except Exception as e:
+        print(f"grasp_object error: {e}")
+        open_gripper(arm=arm)  # clean up
+```
+
+### Evidence
+- Seed 29 baseline: `grasp_object` hung for **619s** → TimeoutError
+- Seed 29 v2 fix: `grasp_object` completed in 158s and 264s (no hang) — hang is not deterministic
+- Seed 28 baseline: `grasp_object` took 220s → SUCCESS
+
+### Limitations
+- Cannot interrupt `grasp_object` once it starts (C++ internals ignore SIGALRM)
+- The 120s minimum budget is a safety margin, not a guarantee — actual duration can exceed 300s
+
+---
+
+## Pattern 5: check_object_in_hand False Positives
+
+### Problem
+`check_object_in_hand` can return true when the object is momentarily grasped but drops during or after `lift_arm`. The reward function checks if the object is STILL in hand AND lifted above initial height.
+
+### When to Apply
+- After any "successful" grasp, be aware the reward may still be 0.
+
+### Evidence (Soda Validation)
+- Seed 52: `move_hand` → `check_object_in_hand` true → reward=0 (dropped)
+- Seed 61: Same pattern — grasped but dropped
+
+### Mitigation
+No code-level fix available. The gripper physics and object shape determine whether the grasp is stable. Retry with a different pose pair if the first grasp reports success but the task isn't completed.</script>
+
+  <script>
+    (function () {
+      // 1. Verbatim Markdown Render & Copy
+      var rawEl = document.getElementById("verbatim-grasping-md");
+      var verbatimDisplay = document.getElementById("verbatimDisplay");
+      var copyBtn = document.getElementById("copyVerbatimBtn");
+      var rawText = rawEl ? rawEl.textContent : "";
+
+      if (verbatimDisplay) verbatimDisplay.textContent = rawText;
+
+      if (copyBtn) {
+        copyBtn.addEventListener("click", function () {
+          function done() {
+            copyBtn.textContent = "已复制 100% 原始 Markdown ✓";
+            setTimeout(function () { copyBtn.textContent = "复制英文原样 Markdown"; }, 2000);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(rawText).then(done);
+          } else {
+            var ta = document.createElement("textarea");
+            ta.value = rawText;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            done();
+          }
+        });
+      }
+
+      // 2. Architecture SVG Lightbox Zoom
+      var openZoom = document.getElementById("openArchZoom");
+      var closeZoom = document.getElementById("closeArchZoom");
+      var zoomModal = document.getElementById("archZoomModal");
+      var zoomMount = document.getElementById("zoomSvgMount");
+      var archSvg = document.getElementById("aspireArchSvg");
+
+      if (openZoom && zoomModal && zoomMount && archSvg) {
+        openZoom.addEventListener("click", function () {
+          var clone = archSvg.cloneNode(true);
+          clone.removeAttribute("id");
+          clone.querySelectorAll("[id]").forEach(function (el) {
+            var oldId = el.getAttribute("id");
+            el.setAttribute("id", oldId + "-zoom");
+          });
+          clone.querySelectorAll("[marker-end]").forEach(function (el) {
+            var m = el.getAttribute("marker-end");
+            if (m) el.setAttribute("marker-end", m.replace(")", "-zoom)"));
+          });
+          zoomMount.innerHTML = "";
+          zoomMount.appendChild(clone);
+          zoomModal.hidden = false;
+          closeZoom.focus();
+        });
+        closeZoom.addEventListener("click", function () {
+          zoomModal.hidden = true;
+          openZoom.focus();
+        });
+        zoomModal.addEventListener("click", function (e) {
+          if (e.target === zoomModal) {
+            zoomModal.hidden = true;
+            openZoom.focus();
+          }
+        });
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape" && !zoomModal.hidden) {
+            zoomModal.hidden = true;
+            openZoom.focus();
+          }
+        });
+      }
+
+      // 3. Runtime 4-Stage Stepper
+      var stages = [
+        {
+          termTitle: "skills_index → 渐进式披露路由",
+          badgeClass: "green",
+          badge: "阶段 01 · 目录级按需检索",
+          heading: "平时只看轻量目录摘要，按子任务或报错点开全文",
+          desc: "把几十份长文档全塞进上下文会稀释注意力。Agent 初始只读取每个 Skill 的标题与一句话触发说明；拆解出“捡起地面汽水罐”子阶段后，才主动点开 navigation.md 与 grasping.md。",
+          bullets: [
+            "写代码前主动查：按导航、抓取、放置等子阶段匹配适用文档",
+            "报错后被动查：根据报错症状（Failure Signature）检索排障策略"
+          ],
+          code: [
+            "# [Agent 初始上下文：仅含轻量目录索引]",
+            "1. behavior/navigation.md",
+            "   -> Base standoff & approach planning for R1 Pro.",
+            "2. behavior/grasping.md  [命中当前子阶段]",
+            "   -> Patterns for grasping objects with the R1 Pro robot.",
+            "      Apply when writing or debugging grasp sequences.",
+            "",
+            "# 按需加载全文：",
+            "> read_skill('aspire/sim/.claude/behavior/skills/grasping.md')"
+          ].join("\n")
+        },
+        {
+          termTitle: "policy.py — # Code block 1",
+          badgeClass: "green",
+          badge: "阶段 02 · 首段生长与视觉核验",
+          heading: "不盲写全篇，先写定位与导航块并检查物理现场",
+          desc: "如果底盘第一步停偏 10 厘米，后面几百行抓取与放置代码全会失效。系统先只写 # Code block 1，运行环境后检查引擎返回的相机感知叠加图与停靠距离。",
+          bullets: [
+            "测得地面汽水罐 z = 0.078m (< 0.1m)，触发 grasping.md 模式 3",
+            "按文档指引停靠至 0.45m（而非 0.6m），并采用 ±90° 垂直逼近角"
+          ],
+          code: [
+            "# === Code block 1: 地面目标定位与底盘停靠 ===",
+            "pose = get_object_pose('soda_can')",
+            "print(f'Target z={pose.z:.3f}m')  # 输出 z=0.078m (< 0.1m)",
+            "",
+            "# 应用模式 3：地面物体拉近至 0.45m + 垂直切入角",
+            "nav_goal = plan_approach_pose(",
+            "    target='soda_can', distance_m=0.45, angle_offset_deg=90",
+            ")",
+            "navigate_base(nav_goal)",
+            "",
+            "# [执行引擎多模态反馈]：",
+            "# ✓ 相机分割叠加图确认目标居中，底盘距离 0.446m"
+          ].join("\n")
+        },
+        {
+          termTitle: "policy.py — # Code block 2..3",
+          badgeClass: "green",
+          badge: "阶段 03 · 逐块追加与多 Seed 验证",
+          heading: "套用双臂交错与防卡死模板，拼合成完整 policy.py",
+          desc: "确认底盘到位后，Agent 将 grasping.md 中的双臂遍历、按位姿快慢交错、120s 预算守卫与抬臂在手校验写入 # Code block 2，每次重置环境从头跑通验证，最后追加放置块收尾。",
+          bullets: [
+            "规避 v1 先跑完所有 move_hand 耗尽 789s 的陷阱",
+            "跨多个随机布局（Seeds）回归测试通过后定型完整脚本"
+          ],
+          code: [
+            "# === Code block 2: 双臂交错抓取与抬臂二次校验 ===",
+            "pregrasps, grasps = sample_grasp_pose('soda_can')",
+            "success = False",
+            "for pg, g in zip(pregrasps, grasps):",
+            "    if success or time_left() < 60:",
+            "        break",
+            "    if time_left() > 120:",
+            "        for arm in [0, 1]:",
+            "            try:",
+            "                open_gripper(arm=arm)",
+            "                grasp_object(pg, g, 'soda_can', arm=arm)",
+            "                lift_arm(arm=arm)",
+            "                if check_object_in_hand(arm=arm):",
+            "                    success = True; break",
+            "            except Exception:",
+            "                open_gripper(arm=arm)",
+            "# === Code block 3: 导航至垃圾桶并松爪放置 ==="
+          ].join("\n")
+        },
+        {
+          termTitle: "部署期直接复跑 vs 持续学习期蒸馏",
+          badgeClass: "orange",
+          badge: "阶段 04 · 生命周期解耦",
+          heading: "同任务直接跑脚本；换新任务丢弃脚本、留存 Skill",
+          desc: "完整 policy.py 验证通过后，工程上拆分为两条路径，兼顾线上执行速度与跨任务经验积累：",
+          bullets: [
+            "同一任务反复运行（部署期）：直接运行该 Python 脚本（内部实时调 SAM3 与 cuRobo），无需大模型每次重新介入思考",
+            "面向下一个新任务（学习期）：旧 policy.py 视为一次性脚手架丢弃，仅将新验证的排障规律提炼写回 skills/*.md"
+          ],
+          code: [
+            "# [路径 A：固定工站重复作业 — 零大模型在线推理开销]",
+            "$ python run_policy.py --script verified_soda_policy.py",
+            "# 脚本内实时感知分割 + 避障规划，自适应每次位置变化",
+            "",
+            "# [路径 B：切换至下一个新任务]",
+            "1. 丢弃单任务特定脚本 verified_soda_policy.py",
+            "2. 将新验证的通用修复蒸馏追加至 skills/*.md：",
+            "   故障特征 + 适用守卫 + 修复代码骨架",
+            "3. 携带更丰富的技能库，为新任务重新逐块生长代码"
+          ].join("\n")
+        }
+      ];
+
+      var stepTabs = document.querySelectorAll("#runtimeStepTabs .step-tab");
+      var leftPane = document.getElementById("runtimeLeftPane");
+      var codePane = document.getElementById("runtimeCodePane");
+      var termTitle = document.getElementById("runtimeTermTitle");
+
+      function showStage(index) {
+        var s = stages[index];
+        if (!s) return;
+        termTitle.textContent = s.termTitle;
+        codePane.textContent = s.code;
+        leftPane.innerHTML =
+          '<span class="badge ' + s.badgeClass + '">' + s.badge + '</span>' +
+          '<h3 style="margin:10px 0 8px">' + s.heading + '</h3>' +
+          '<p style="font-size:14px;margin:0 0 10px">' + s.desc + '</p>' +
+          '<ul class="clean-list">' +
+          s.bullets.map(function (item) { return "<li>" + item + "</li>"; }).join("") +
+          "</ul>";
+      }
+
+      stepTabs.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var idx = parseInt(btn.getAttribute("data-step"), 10);
+          stepTabs.forEach(function (b) { b.setAttribute("aria-selected", "false"); });
+          btn.setAttribute("aria-selected", "true");
+          showStage(idx);
+        });
+      });
+      showStage(0);
+
+      // 4. Skill Inspector 4-Mode Tabs
+      var modeTabs = document.querySelectorAll("#skillTabs .mode-tab");
+      var skillPanes = document.querySelectorAll("#skill-anatomy .skill-pane");
+
+      modeTabs.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var target = btn.getAttribute("data-pane");
+          modeTabs.forEach(function (b) { b.setAttribute("aria-selected", "false"); });
+          skillPanes.forEach(function (p) { p.hidden = (p.id !== target); });
+          btn.setAttribute("aria-selected", "true");
+        });
+      });
+
+      // 5. Generalization 3-Tier Switcher
+      var tiers = {
+        "1": {
+          badgeClass: "green",
+          badge: "不需要重新摸索 · 0 轮额外试错",
+          title: "同一任务，但物体换了摆放位置、朝向或多了干扰物",
+          body: "ASPIRE 摸索后固化的不是写死关节角的示教轨迹，而是一套实时调用 <code>SAM3</code>（视觉分割定位）+ <code>AnyGrasp</code>（点云抓取采样）+ <code>cuRobo</code>（无碰撞运动规划）的闭环控制程序。只要任务目标没变，哪怕罐子滚到不同位置或旁边多了杂物，现有 <code>policy.py</code> 直接运行即可适应。",
+          foot: "对应论文证据：LIBERO-Pro 四类扰动测试 80 个任务平均成功率最高达 ~99%。"
+        },
+        "2": {
+          badgeClass: "green",
+          badge: "零样本显著涨分（4% → 31%），但冲刺高可靠仍需摸索 3～5 轮",
+          title: "相似操作域，但组合成从未见过的新长程任务",
+          body: "论文在未见过的 <strong>LIBERO-Pro Long</strong> 上给出了禁止现场试错（纯 Zero-Shot）的对比：无技能库基线仅 <strong>4%</strong>，挂载历史技能库的 ASPIRE 提升至 <strong>31%</strong>。这说明旧技能确实帮它绕开了大量基础几何坑；但 31% 也意味着不经过现场试错的话，10 次里仍有近 7 次会因新子步衔接问题失败。要达到 90%+ 工程可用水平，仍需在新任务上迭代调试几轮 —— 只是试错轮次从“几十轮”缩短到了“寥寥几轮”。",
+          foot: "对应论文证据：LIBERO-Pro Long 零样本 31% vs 4%；真机跨本体调试推理 Token 降低约 10×。"
+        },
+        "3": {
+          badgeClass: "orange",
+          badge: "必须重新摸索一阵子 · 受限于编译耗时与真机人工复位",
+          title: "全新物理接触机制（如紧配滑轨、倒水）或零容错陌生现场",
+          body: "跨入技能库未覆盖的物理机制时，真机现场摸索面临双重现实约束：<br>1. <strong>System-2 编译期耗时：</strong>每次物理失败后需读取关键帧图像、消耗数万推理 Token 重写几何控制逻辑再验证，调通一个全新复杂任务往往耗时数十分钟至数小时。<br>2. <strong>真机缺乏 <code>env.reset()</code>：</strong>仿真重置只需一行代码；真机若第 1 轮试错把水杯碰倒或把零件推入死角，往往需要<strong>人工驻场复位（Human Reset）</strong>才能继续下一轮摸索。",
+          foot: "工程边界判断：适合投产前可驻场自调机的固定工位，暂不适合首次入户零试错容忍度的开放家政场景。"
+        }
+      };
+
+      var tierBtns = document.querySelectorAll("#gradSelector .tier-btn");
+      var tierPanel = document.getElementById("gradDetailPanel");
+
+      function showTier(key) {
+        var t = tiers[key];
+        if (!t || !tierPanel) return;
+        tierPanel.innerHTML =
+          '<span class="badge ' + t.badgeClass + '">' + t.badge + '</span>' +
+          '<h3 style="margin:10px 0 8px">' + t.title + '</h3>' +
+          '<p style="font-size:14.2px;margin:0 0 12px">' + t.body + '</p>' +
+          '<div style="font-size:12.5px;color:var(--muted);padding-top:10px;border-top:1px solid var(--line)">' + t.foot + '</div>';
+      }
+
+      tierBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var k = btn.getAttribute("data-tier");
+          tierBtns.forEach(function (b) { b.setAttribute("aria-selected", "false"); });
+          btn.setAttribute("aria-selected", "true");
+          showTier(k);
+        });
+      });
+      showTier("1");
+
+      // 6. Print Button
+      var printBtn = document.getElementById("printPageBtn");
+      if (printBtn) {
+        printBtn.addEventListener("click", function () { window.print(); });
+      }
+
+      // 7. Reading Progress & ScrollSpy
+      var progressBar = document.getElementById("readingProgress");
+      var secIds = ["paradigm", "runtime", "benchmarks", "skill-anatomy", "boundaries", "sources"];
+      var navLinks = document.querySelectorAll("#tocNav a");
+
+      function onScroll() {
+        var top = window.scrollY || document.documentElement.scrollTop;
+        var total = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        if (progressBar) {
+          progressBar.style.width = (total > 0 ? Math.min(100, Math.max(0, (top / total) * 100)) : 0).toFixed(1) + "%";
+        }
+        var current = secIds[0];
+        for (var i = 0; i < secIds.length; i++) {
+          var el = document.getElementById(secIds[i]);
+          if (el && el.getBoundingClientRect().top <= 120) current = secIds[i];
+        }
+        navLinks.forEach(function (a) {
+          a.classList.toggle("active", a.getAttribute("href") === "#" + current);
+        });
+      }
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    })();
+  </script>
+</body>
+</html>
