@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="围绕 Apple AIML 人形机器人自主系统 HALO（arXiv:2611.06908）的全景解读、四大底层技术追问、六项幕后工程洞察及 GitHub 开源资产与 1,000+ 虚拟房间可用性核查。">
+<meta name="category" content="Product">
+<meta property="article:section" content="Product">
+<meta name="article-format" content="技术解读">
+<title>Apple HALO 博客深度解读、核心技术问答与开源资产拆解｜Reading Notes</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface-alt: #f1f0ec;
+    --ink: #18181b;
+    --ink-secondary: #4b5563;
+    --ink-muted: #71717a;
+    --border: #e4e2dc;
+    --accent: #0071e3;       /* Apple / HALO Tracker Blue */
+    --accent-soft: #e8f2ff;
+    --gen: #0d9488;          /* HALO Generator Teal */
+    --gen-soft: #ccfbf1;
+    --commit: #d97706;       /* HALO Committed Motion Amber */
+    --commit-soft: #fef3c7;
+    --orch: #4f46e5;         /* Orchestrator Indigo */
+    --orch-soft: #eef2ff;
+    --good: #15803d;
+    --good-soft: #dcfce7;
+    --warn: #b91c1c;
+    --warn-soft: #fee2e2;
+    --code-bg: #14151a;
+    --code-ink: #e5e7eb;
+    --shadow: 0 4px 22px rgba(24, 24, 27, 0.05);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.72;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Sticky Topbar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(247, 247, 245, 0.9);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar-inner {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .home-back-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    transition: all 0.16s ease;
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
+  }
+
+  .home-back-pill:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+  }
+
+  .brand svg {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-secondary);
+    padding: 5px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+  }
+
+  .nav-links a:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .container {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 36px 24px 84px;
+  }
+
+  /* Hero Section */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 38px 38px 32px;
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, var(--orch), var(--gen), var(--accent), #f59e0b);
+  }
+
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .badge.teal {
+    background: var(--gen-soft);
+    color: #0f766e;
+  }
+
+  .badge.amber {
+    background: var(--commit-soft);
+    color: #92400e;
+    border: 1px solid #fde68a;
+  }
+
+  .badge.dark {
+    background: #18181b;
+    color: #f4f4f5;
+  }
+
+  .hero h1 {
+    font-size: 29px;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+
+  .hero-quote {
+    display: inline-block;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f766e;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+    padding: 6px 14px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+
+  .hero-sub {
+    color: var(--ink-secondary);
+    font-size: 15.5px;
+    margin-bottom: 22px;
+  }
+
+  .hero-sub a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--accent);
+  }
+
+  .context-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .stat-box {
+    background: var(--surface-alt);
+    border-radius: 12px;
+    padding: 13px 15px;
+  }
+
+  .stat-box .k {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-weight: 600;
+    display: block;
+  }
+
+  .stat-box .v {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 2px 0 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-box .v.blue { color: var(--accent); }
+  .stat-box .v.teal { color: var(--gen); }
+  .stat-box .v.amber { color: var(--commit); }
+
+  .stat-box .d {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    line-height: 1.42;
+    display: block;
+  }
+
+  /* Section Card */
+  .sec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 36px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+    scroll-margin-top: 76px;
+  }
+
+  .sec-header {
+    background: linear-gradient(135deg, #eff6ff 0%, #fafaf9 100%);
+    border: 1px solid #bfdbfe;
+    border-left: 5px solid var(--accent);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 26px;
+  }
+
+  .sec-header.teal {
+    background: linear-gradient(135deg, #f0fdfa 0%, #fafaf9 100%);
+    border-color: #99f6e4;
+    border-left-color: var(--gen);
+  }
+
+  .sec-header.indigo {
+    background: linear-gradient(135deg, #eef2ff 0%, #fafaf9 100%);
+    border-color: #c7d2fe;
+    border-left-color: var(--orch);
+  }
+
+  .sec-header.amber {
+    background: linear-gradient(135deg, #fffbeb 0%, #fafaf9 100%);
+    border-color: #fde68a;
+    border-left-color: var(--commit);
+  }
+
+  .sec-tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 5px;
+  }
+
+  .sec-header.teal .sec-tag { color: var(--gen); }
+  .sec-header.indigo .sec-tag { color: var(--orch); }
+  .sec-header.amber .sec-tag { color: var(--commit); }
+
+  .sec-title {
+    font-size: 21px;
+    font-weight: 750;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  .tldr-callout {
+    background: #fffbeb;
+    border: 1px solid #fde047;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 26px;
+    font-size: 15px;
+  }
+
+  .tldr-callout strong {
+    color: #78350f;
+  }
+
+  h3 {
+    font-size: 18.5px;
+    font-weight: 700;
+    margin: 30px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+  }
+
+  h3 .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  h3 .step-num.teal { background: var(--gen); }
+  h3 .step-num.indigo { background: var(--orch); }
+  h3 .step-num.amber { background: var(--commit); }
+
+  h4.sub-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 20px 0 8px;
+    color: #1e3a8a;
+  }
+
+  p {
+    margin-bottom: 14px;
+    color: #27272a;
+  }
+
+  ul, ol {
+    margin: 8px 0 18px 22px;
+  }
+
+  li {
+    margin-bottom: 8px;
+    color: #27272a;
+  }
+
+  li strong {
+    color: var(--ink);
+  }
+
+  code {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: #1f2937;
+  }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 16px 20px;
+    border-radius: 12px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 12px 0 20px;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  .tok-cmt { color: #6b7280; font-style: italic; }
+  .tok-key { color: #93c5fd; }
+  .tok-fn  { color: #fde047; font-weight: 700; }
+  .tok-str { color: #86efac; }
+  .tok-num { color: #fca5a5; }
+
+  /* Architecture 3-Layer Stack */
+  .arch-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 18px 0 26px;
+  }
+
+  .arch-layer {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    background: #fafaf9;
+    display: grid;
+    grid-template-columns: 225px 1fr;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .arch-layer.l-orch { border-left: 5px solid var(--orch); }
+  .arch-layer.l-gen  { border-left: 5px solid var(--gen); }
+  .arch-layer.l-trk  { border-left: 5px solid var(--accent); }
+
+  .arch-title {
+    font-weight: 750;
+    font-size: 15px;
+    color: var(--ink);
+  }
+
+  .arch-freq {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-top: 5px;
+  }
+
+  .l-orch .arch-freq { background: var(--orch-soft); color: var(--orch); }
+  .l-gen  .arch-freq { background: var(--gen-soft); color: #0f766e; }
+  .l-trk  .arch-freq { background: var(--accent-soft); color: var(--accent); }
+
+  .arch-hw {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+  }
+
+  .arch-desc {
+    font-size: 14.5px;
+    color: var(--ink-secondary);
+  }
+
+  .arch-arrow {
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  /* 4-Station Data Pipeline Grid */
+  .pipe-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 16px 0 24px;
+  }
+
+  .pipe-box {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--gen);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+
+  .pipe-box small {
+    display: block;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--gen);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+
+  .pipe-box b {
+    display: block;
+    font-size: 15.5px;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+
+  .pipe-box p {
+    font-size: 13.8px;
+    color: var(--ink-secondary);
+    margin: 0;
+  }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 14px 0 22px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: var(--surface);
+  }
+
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--surface-alt);
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr.highlight-row td {
+    background: #eff6ff;
+    font-weight: 700;
+  }
+
+  .num-best {
+    color: var(--accent);
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill-ok, .pill-warn, .pill-no, .pill-part {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .pill-ok   { background: var(--good-soft); color: var(--good); }
+  .pill-no   { background: var(--warn-soft); color: var(--warn); }
+  .pill-warn { background: var(--commit-soft); color: #92400e; }
+  .pill-part { background: #e0e7ff; color: #3730a3; }
+
+  /* Sub-Q&A Divider Blocks inside Section 02 */
+  .sub-qa {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 26px;
+    margin-top: 24px;
+    background: #fcfcfb;
+  }
+
+  .sub-qa-q {
+    font-size: 17.5px;
+    font-weight: 750;
+    color: var(--ink);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px dashed var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .sub-qa-q .q-badge {
+    background: var(--ink);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 2px 9px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Ablation Visual Bars */
+  .bench-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin: 18px 0 20px;
+  }
+
+  .bench-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .bench-title {
+    font-weight: 700;
+    font-size: 14.5px;
+  }
+
+  .bench-rows {
+    display: grid;
+    gap: 15px;
+  }
+
+  .bench-group-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .bench-group-label small {
+    color: var(--ink-muted);
+    font-weight: 500;
+  }
+
+  .bar-group {
+    display: grid;
+    gap: 6px;
+  }
+
+  .bar-line {
+    display: grid;
+    grid-template-columns: 200px 1fr 68px;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--ink-secondary);
+  }
+
+  .bar-track {
+    height: 11px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .bar-val {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--ink);
+  }
+
+  /* Two-column contrast cards */
+  .contrast-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 16px 0 20px;
+  }
+
+  .contrast-card {
+    border-radius: 14px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+  }
+
+  .contrast-card.good {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+  }
+
+  .contrast-card.bad {
+    background: #fef2f2;
+    border-color: #fecaca;
+  }
+
+  .contrast-card.info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }
+
+  .contrast-card h4 {
+    font-size: 15px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .contrast-card.good h4 { color: var(--good); }
+  .contrast-card.bad h4  { color: var(--warn); }
+  .contrast-card.info h4 { color: var(--accent); }
+
+  .contrast-card p, .contrast-card ul {
+    font-size: 13.8px;
+    margin-bottom: 0;
+    color: var(--ink-secondary);
+  }
+
+  /* Insights Grid */
+  .insight-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .insight-card {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+
+  .insight-card .num-chip {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--orch-soft);
+    color: var(--orch);
+    margin-bottom: 8px;
+  }
+
+  .insight-card h4 {
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+
+  .insight-card p {
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin-bottom: 0;
+  }
+
+  .quote-box {
+    background: var(--surface-alt);
+    border-left: 4px solid var(--commit);
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin: 14px 0 18px;
+  }
+
+  .warn-note {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-top: 20px;
+    font-size: 14.5px;
+  }
+
+  .warn-note strong {
+    color: #92400e;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-muted);
+    padding-top: 12px;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  @media (max-width: 820px) {
+    .topbar-inner {
+      padding: 10px 16px;
+      gap: 8px;
+    }
+    .nav-links {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      width: 100%;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .nav-links::-webkit-scrollbar {
+      display: none;
+    }
+    .context-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .pipe-grid,
+    .contrast-grid,
+    .insight-grid {
+      grid-template-columns: 1fr;
+    }
+    .arch-layer {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .hero, .sec-card {
+      padding: 24px 20px;
+    }
+    .bar-line {
+      grid-template-columns: 135px 1fr 56px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-left">
+      <a class="home-back-pill" href="../index.html">← 返回博客首页</a>
+      <a class="brand" href="#top">
+        <svg viewBox="0 0 36 36" fill="none" aria-hidden="true">
+          <rect width="36" height="36" rx="9" fill="#18181B"/>
+          <ellipse cx="18" cy="11.5" rx="9.5" ry="3.6" stroke="#4FD1C5" stroke-width="2"/>
+          <circle cx="18" cy="18.5" r="3.2" fill="#F5F5F7"/>
+          <path d="M11.5 27.5C13.2 23.8 15.4 22 18 22C20.6 22 22.8 23.8 24.5 27.5" stroke="#2997FF" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <span>Apple HALO 深度解读</span>
+      </a>
+    </div>
+    <nav class="nav-links">
+      <a href="#sec-intro">01 · 项目全景介绍</a>
+      <a href="#sec-qa">02 · 四大核心技术追问</a>
+      <a href="#sec-insights">03 · 六大幕后洞察</a>
+      <a href="#sec-opensource">04 · 开源情况核查</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container" id="top">
+
+  <!-- ==================== HERO ==================== -->
+  <section class="hero">
+    <div class="badge-row">
+      <span class="badge dark">Apple AIML Research · 2026</span>
+      <a class="badge" href="https://arxiv.org/abs/2611.06908" target="_blank" rel="noopener">论文：arXiv:2611.06908</a>
+      <a class="badge teal" href="https://apple-aiml-research.github.io/ml-halo/" target="_blank" rel="noopener">项目主页：ml-halo</a>
+      <a class="badge amber" href="https://github.com/apple-aiml-research/ml-halo" target="_blank" rel="noopener">GitHub：apple-aiml-research/ml-halo</a>
+    </div>
+    <h1>HALO：基于仿真的感知型人形机器人全身自主控制</h1>
+    <div class="hero-quote">“Trained in homes that don’t exist. Deployed in homes it has never seen.”（在不存在的虚拟家庭中训练，零样本部署到从未见过的真实家庭。）</div>
+    <p class="hero-sub">
+      本文档系统梳理了 Apple 机器学习研究团队（Siyuan Hu、Matthias Müller、Vladlen Koltun 等）发布的 <strong>HALO</strong>（<em>Humanoid Autonomy, Learned in simulation, running Onboard</em>）工作介绍、围绕底层实现机制的<strong>四大硬核技术问答</strong>、论文附录揭示的<strong>六项幕后真相</strong>，以及对官方代码仓库<strong>开源范围与 1,000+ 虚拟房间可用性</strong>的逐项核查。
+    </p>
+    <div class="context-grid">
+      <div class="stat-box">
+        <span class="k">真机零样本单任务成功率</span>
+        <div class="v blue">91%</div>
+        <span class="d">6 个未扫描真实家庭 × 360 次测试（与仿真 91% 零掉点）</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">纯合成训练语料规模</span>
+        <div class="v teal">1,000 房 / 300h</div>
+        <span class="d">250 × H100 自动合成 162,698 条轨迹，零遥操作采集</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">全机载异步三层控制栈</span>
+        <div class="v">0.5 / 3 / 50 Hz</div>
+        <span class="d">Mac mini M4 Pro + Jetson Orin NX 双算力无缆闭环</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">开源状态核查</span>
+        <div class="v amber">代码+配方已开</div>
+        <span class="d">含 SysID G1 与烘焙管线；未附模型权重，合成仅含 sit</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 01: INTRO ==================== -->
+  <section class="sec-card" id="sec-intro">
+    <div class="sec-header teal">
+      <span class="sec-tag">Part 01 · 项目博客与论文全景介绍</span>
+      <div class="sec-title">HALO 解决了什么核心痛点？整套系统是如何运转的？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>核心命题：</strong>现有人形机器人能后空翻、能跳舞，但都是“敏捷的盲人”——无法走进一间从未扫描过的陌生客厅，听懂人话找到椅子坐下或钻过茶几。阻碍通用人形自主性的最大瓶颈是<strong>配对数据稀缺</strong>：用遥操作服（如 TWIST）或手持设备采集 1 小时“第一视角图像 + 语言指令 → 全身关节动作”至少耗费 1 小时人力。<br>
+      <strong>HALO 的解法：</strong>用<strong>程序化仿真合成管线</strong>把数据规模与人类体力劳动彻底解耦（仅受算力约束），在 1,000 个虚拟房间自动合成视觉-语言-动作语料，并通过<strong>语义与物理分层解耦的全机载三层控制栈</strong>，实现了从未见过的真实家庭零样本全身交互。
+    </div>
+
+    <h3><span class="step-num teal">1</span>全机载三层自主架构（Onboard Autonomy Stack）</h3>
+    <p>HALO 在改装后的 <strong>Unitree G1（29 自由度，整重 37.56 kg）</strong> 上实现了完全无外接电缆的端侧自主计算。感知在两个抽象层级分两次介入——<strong>前两层解决“语义问题”（去哪张椅子？怎么绕过去？），最底层解决“物理问题”（真实椅面到底有多高？落座如何不摔倒？）</strong>：</p>
+
+    <div class="arch-stack">
+      <div class="arch-layer l-orch">
+        <div>
+          <div class="arch-title">A · Orchestrator（任务编排器）</div>
+          <span class="arch-freq">~0.5 Hz（约每 2 秒）</span>
+          <span class="arch-hw">硬件：背部 Mac mini M4 Pro (64GB)</span>
+        </div>
+        <div class="arch-desc">
+          现成离线 VLM（<code>Qwen3.6-35B-A3B</code>，4-bit MLX）。接收人类自由语言指令（如 <em>“Push box away”</em>、<em>“Crouch under the table, then sit on the chair”</em>）与头部 <code>120°</code> 广角 RGB 画面，将长程请求拆解为原子子任务序列；闭环判断当前步骤成功则推进，失败则重试或插入前置动作。
+        </div>
+      </div>
+      <div class="arch-arrow">↓ 下发单条标准化子任务文本（如 <code>"sit down on the chair"</code>）</div>
+      <div class="arch-layer l-gen">
+        <div>
+          <div class="arch-title">B · Motion Generator（运动生成器）</div>
+          <span class="arch-freq">~3 Hz（每 0.33 秒重规划）</span>
+          <span class="arch-hw">硬件：背部 Mac mini M4 Pro (MLX)</span>
+        </div>
+        <div class="arch-desc">
+          非对称编码-解码器：<strong>冻结 <code>Qwen3.5-2B</code> 编码器 + <code>49.3M</code> 参数 DiT 解码器</strong>（Flow Matching，15 步 Euler 采样，耗时 ~152ms）。根据当前 RGB 图像与子任务，每次生成未来 <strong>5 秒（150 帧 × 36 维：29 关节角 + 骨盆局部 3D 平移 + 4D 四元数）</strong> 全身运动学轨迹，其中前 <strong>0.5 秒（15 帧）锁定提交（Committed）</strong>以保证异步重规划无缝衔接。
+        </div>
+      </div>
+      <div class="arch-arrow">↓ 通过千兆网口 ZeroMQ 流式下发 30Hz 全身运动学参考轨迹</div>
+      <div class="arch-layer l-trk">
+        <div>
+          <div class="arch-title">C · Motion Tracker（物理跟踪器）</div>
+          <span class="arch-freq">50 Hz 硬实时控制（PD 200 Hz）</span>
+          <span class="arch-hw">硬件：机身原装 Jetson Orin NX</span>
+        </div>
+        <div class="arch-desc">
+          运行在 <code>PREEMPT_RT</code> 实时内核上的 C++ TensorRT 进程。融合躯干下视 <code>55°</code> 深度相机（经 <code>LiteAnyStereo</code> 双目重建为干净的 <code>48×84</code> 深度图）、IMU 与 30 步本体历史，在满足平衡、接触与电机力矩限制的前提下高频跟踪规划轨迹，输出 29 个关节位置目标。
+        </div>
+      </div>
+    </div>
+
+    <h3><span class="step-num teal">2</span>合成数据引擎：如何用算力凭空造出 300 小时配对数据？</h3>
+    <p>博客通过四个交互站点拆解了在 <strong>250 张 H100 GPU 上运行 48 小时</strong>全自动产出的合成数据管线（共 6 大技能、162,698 条轨迹、296.3 小时）：</p>
+
+    <div class="pipe-grid">
+      <div class="pipe-box">
+        <small>Station A · Kimodo + 33 Checks</small>
+        <b>运动学全身动作合成与几何质检</b>
+        <p>将任务拆解为带文本提示、路径点（Waypoints）和终点关键帧（Keyframe）的片段（如向前走 → 转身 → 坐下），调用动作扩散模型 <code>Kimodo</code> 批量采样候选轨迹，并用多达 <strong>33 项前向运动学几何校验</strong>（过滤脚底打滑、地面穿模、悬空跳变、关节超限）保留最高分轨迹。</p>
+      </div>
+      <div class="pipe-box">
+        <small>Station B · Infinigen 1,000 Homes</small>
+        <b>程序化虚拟家庭构建与无碰撞放置</b>
+        <p>利用 <code>Infinigen</code> 生成 1,000 个训练房间（45% 客厅、30% 办公室、25% 卧室，边长 3.5–9.5m，含 20–80 件家具）及 178 个独立测试房间。提取 10cm 2D 占据栅格，在 <code>SE(2)</code> 空间采样旋转平移位姿 <code>(x, y, θ)</code>，保留轨迹与家具无碰撞（骨盆间距 ≥0.35m）的配置。</p>
+      </div>
+      <div class="pipe-box">
+        <small>Station C · Baking + Fisheye DR</small>
+        <b>全局光照烘焙与鱼眼相机域随机化</b>
+        <p>先用 Blender Cycles 将每个房间的全局光照一次性烘焙为无光照自发光贴图，再在 Isaac Sim 5.1 中按真机标定的 <code>OAK-1W</code> 鱼眼内参（<code>1280×800</code>，下倾 <code>25°</code>）高速回放渲染，并施加 <strong>8 种视觉域随机化</strong>（运动模糊、椒盐噪声、强/暗光、冷/暖色调、绿偏色、高对比度）。</p>
+      </div>
+      <div class="pipe-box">
+        <small>Station D · Imitation + 3-Phase RL</small>
+        <b>模仿学习与强化学习分治训练</b>
+        <p>使用合成的“第一视角视频 + 语言 + 全身动作”三元组，在 <strong>64 张 B200</strong> 上以 Flow Matching 模仿学习训练中层 Motion Generator；同时结合合成动作与重定向的 <code>LAFAN1</code> 人类动捕片段，在 <strong>4 张 H100</strong>（Isaac Lab）上通过三阶段强化学习训练底层感知型 Motion Tracker。</p>
+      </div>
+    </div>
+
+    <h3><span class="step-num teal">3</span>实机零样本评测结果与同类系统横向对比</h3>
+    <p>团队在 <strong>100 个未见过的仿真房间（6,000 次试验）</strong> 和 <strong>6 个从未扫描/建模过的真实物理环境（360 次单任务试验）</strong> 中进行了严格零样本评测：</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>评测类别</th>
+            <th>任务名称</th>
+            <th>动作内容与成功判定标准</th>
+            <th>仿真成功率 (Held-out)</th>
+            <th>真机零样本成功率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="7"><strong>单任务</strong><br><small>Single-Task<br>(6 真机环境)</small></td>
+            <td><code>Go-To</code></td>
+            <td>走向指定物体（椅子/箱子/篮球/垃圾桶/真人）并停在 1.0m 内</td>
+            <td>98%</td>
+            <td>92%</td>
+          </tr>
+          <tr>
+            <td><code>Sit</code></td>
+            <td>走近扶手椅或沙发、转身并稳稳坐下</td>
+            <td>84%</td>
+            <td>85%</td>
+          </tr>
+          <tr>
+            <td><code>Door</code></td>
+            <td>走向仅半开（30°–45°）的门，三次侧滑步穿过门缝且不碰门扇</td>
+            <td>91%</td>
+            <td>93%</td>
+          </tr>
+          <tr>
+            <td><code>Crouch</code></td>
+            <td>深蹲弯腰穿过 1.05–1.40m 高的桌面下方并在另一侧站起</td>
+            <td>95%</td>
+            <td class="num-best">100%</td>
+          </tr>
+          <tr>
+            <td><code>Crawl</code></td>
+            <td>手膝着地四足爬行穿过 0.70–1.05m 低矮桌底（含户外草地/水泥地）</td>
+            <td>84%</td>
+            <td>90%</td>
+          </tr>
+          <tr>
+            <td><code>Push</code></td>
+            <td>走近地面纸箱并俯身将其向前推动至少 0.3m</td>
+            <td>93%</td>
+            <td>88%</td>
+          </tr>
+          <tr class="highlight-row">
+            <td colspan="2">单任务平均（Mean）</td>
+            <td>总计 6,000 次仿真试验 / 360 次真实世界试验</td>
+            <td class="num-best">91%</td>
+            <td class="num-best">91%</td>
+          </tr>
+          <tr>
+            <td rowspan="4"><strong>长程多任务</strong><br><small>Multi-Task<br>(VLM 串联闭环)</small></td>
+            <td><code>Door → Go-To</code></td>
+            <td>侧身穿过半开的门后，继续找到并走向指定目标</td>
+            <td>71%</td>
+            <td class="num-best">100%</td>
+          </tr>
+          <tr>
+            <td><code>Crouch → Sit</code></td>
+            <td>先弯腰钻过桌子障碍，再找到椅子坐下</td>
+            <td>73%</td>
+            <td>60%</td>
+          </tr>
+          <tr>
+            <td><code>Crouch → Go-To → Push</code></td>
+            <td>钻过桌子 → 走向箱子 → 将箱子推走（三步连续完成）</td>
+            <td>64%</td>
+            <td>50%</td>
+          </tr>
+          <tr class="highlight-row">
+            <td colspan="2">多任务平均（Mean）</td>
+            <td>要求链条内所有子任务按序全部成功且全程不摔倒</td>
+            <td>69%</td>
+            <td>70%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>与其他无需遥操作（Teleoperation-free）的人形机器人系统相比，<strong>HALO 是目前唯一同时具备自由语言理解、在线多步技能串联、底层带深度视觉感知控制，且在 6 个完全未见过的真实场景做大规模零样本验证的系统</strong>（对比 VLK 仅在 2 个预先扫描并用于训练的房间里测试）。</p>
+  </section>
+
+  <!-- ==================== SECTION 02: 4 DEEP Q&A ==================== -->
+  <section class="sec-card" id="sec-qa">
+    <div class="sec-header">
+      <span class="sec-tag">Part 02 · 四大核心技术追问深度拆解</span>
+      <div class="sec-title">看似都是常规模块，为什么组合起来效果如此惊艳？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>总纲解答 —— 为什么“简单模块”跑出了惊艳效果？</strong><br>
+      HALO 没有迷信“用一个超大端到端 VLA 硬抗所有物理细节”，而是把<strong>问题边界切分得极其干净</strong>，并用严密的工程把模块交界处的裂缝全部堵死：<br>
+      ① <strong>分层各司其职</strong>：高层只做离散工具选择，中层只管骨盆局部坐标系下的几何意图（不用懂接触力学），底层只管 0.1–0.6 秒内的物理平衡与局部深度适应（不用懂人类语言）；<br>
+      ② <strong>真正吃到了场景规模红利</strong>：训练房间从 1 个扩到 1,000 个，单靠环境多样性就把 Sit 成功率从 <strong>43% 拉升到了 84%</strong>；<br>
+      ③ <strong>消灭了异步与传感器的隐形断层</strong>：中层用 Training-time Chunking 消灭重规划跳变（24% → 84%），底层用神经网络双目匹配 + 电机系统辨识把 Sim-to-Real 误差压到了极致。
+    </div>
+
+    <!-- Sub-Q1 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 1</span>
+        <span>高层任务编排模型（Orchestrator）用的是什么模型？有专门的后训练吗？</span>
+      </div>
+      <p><strong>1. 具体模型：</strong>默认全机载离线运行在背部 Mac mini M4 Pro 上，使用的是阿里开源的 MoE 视觉语言模型 <strong><code>Qwen3.6-35B-A3B</code>（4-bit 量化，基于 Apple MLX 框架推理）</strong>。得益于总参 35B、单 token 仅激活 3B 的稀疏架构，单次状态转移决策延迟仅 <strong>0.72 秒</strong>（与运动生成器共享 GPU 时约 <strong>1.46 秒</strong>）。系统也支持可选切换至云端大模型 API。</p>
+      <p><strong>2. 有没有后训练？</strong><strong>完全没有后训练（Off-the-shelf 零样本调用）！</strong>它之所以不微调就能稳定驱动机器人，靠的是<strong>“极度收窄的词表映射 + 闭环工具状态机”</strong>：</p>
+      <ul>
+        <li><strong>把开放语言坍缩为 10 条固定指令：</strong>编排器只能从 Prompt 给定的 <strong>11 个受限函数</strong>（<code>go_to_chair</code>、<code>go_to_box</code>、<code>go_to_human</code>、<code>follow</code>、<code>sit</code>、<code>crouch_under</code>、<code>crawl_through</code>、<code>sidewalk</code>、<code>push_box</code>、<code>stand</code>、<code>hold</code>）中挑选，再查表翻译成下游生成器训练时见过的 <strong>10 条一字不差的标准短句</strong>，彻底帮中层小模型挡住了自由语言的多样性冲击。</li>
+        <li><strong>高频闭环监督工具调用：</strong>子任务执行期间，编排器持续读取最新相机画面及机器人当前骨盆高度（<code>base_height</code>）与偏航角（<code>yaw</code>），每次仅调用一个控制原语：</li>
+      </ul>
+<pre><code><span class="tok-cmt"># Orchestrator 运行时闭环监督的 6 个原子工具（固定 System Prompt 常驻 MLX KV Cache）</span>
+<span class="tok-fn">set_plan</span>(steps)        <span class="tok-cmt"># 生成或重写最多 8 步的有序子任务计划（JSON Schema 强约束）</span>
+<span class="tok-fn">complete_step</span>(success) <span class="tok-cmt"># 判定当前步已完成（仅当机器人停稳且姿态恢复正常时允许调用），推进下一步</span>
+<span class="tok-fn">retry_step</span>()           <span class="tok-cmt"># 子任务提前停下但目标仍在前方可达处，原地重新触发当前子任务</span>
+<span class="tok-fn">insert_step</span>(subtask)   <span class="tok-cmt"># 当前路径被桌子/半开门挡住，动态插入前置动作（如 crouch_under）清障</span>
+<span class="tok-fn">ask_operator</span>(question) <span class="tok-cmt"># 视野丢失目标或场景存在歧义时，严禁盲猜，主动向人类发问</span>
+<span class="tok-fn">finish_mission</span>()       <span class="tok-cmt"># 全部子任务确认完成，结束整个长程任务</span></code></pre>
+    </div>
+
+    <!-- Sub-Q2 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 2</span>
+        <span>全身运动生成器只用了 2B 且是冻结编码器，这真的能训出来吗？</span>
+      </div>
+      <p>不仅训出来了，而且<strong>可训练参数其实只有 <code>49.3M</code></strong>（8 层 DiT 解码器，宽度 512，8 头）。它能跑通的核心原因有四点：</p>
+      <ol>
+        <li><strong>保留完整空间 Token 而非单向量压缩：</strong>输入图像虽缩放到 <code>224×224</code>，但模型提取了冻结 <code>Qwen3.5-2B</code> 最后一层的<strong>全部 64 个图像 Patch Token + 全部文本 Token</strong>（从 2048 维线性投影至 512 维），DiT 解码器通过 Cross-Attention 直接读取目标在视野中的粗略方位与距离。厘米级的最后接触精度交给底层深度 Tracker 兜底，无需 2B 编码器精确测距。</li>
+        <li><strong>局部骨盆坐标系与离线特征缓存：</strong>输出的 150 帧轨迹全部相对于当前时刻骨盆坐标系表达（天然具备全局位置不变性）。因为编码器完全冻结，团队直接把 <strong>3,100 万个样本的 VLM 特征提前离线算好存盘</strong>，从而在 64 张 B200 上开出 <strong>5,120 的超大全局 Batch Size</strong> 高速训练 50 个 Epoch。</li>
+        <li><strong>Training-time Chunking + Flow Matching 解决异步跳变：</strong>每次重规划时，机器人已承诺执行的未来 <code>P = 15</code> 帧（0.5 秒）直接作为无噪 Clean Token（流时间标记 <code>s = 1</code>）拼在序列开头，网络只去噪后 135 帧（4.5 秒），从数学结构上内化了新旧规划的平滑连续性。</li>
+      </ol>
+
+      <div class="bench-box">
+        <div class="bench-head">
+          <div class="bench-title">论文 Table III 关键消融实验（100 个未见仿真房间 Sit 任务成功率）</div>
+        </div>
+        <div class="bench-rows">
+          <div>
+            <div class="bench-group-label"><span>① 异步连续性机制（Real-time Chunking）</span><small>消除 3Hz 重规划切换时的轨迹跳变</small></div>
+            <div class="bar-group">
+              <div class="bar-line"><span><strong>Training-time（HALO 采用）</strong></span><div class="bar-track"><div class="bar-fill" style="width:84%;background:var(--gen)"></div></div><span class="bar-val">84%</span></div>
+              <div class="bar-line"><span>Inference-time（推理时引导修补）</span><div class="bar-track"><div class="bar-fill" style="width:66%;background:#94a3b8"></div></div><span class="bar-val">66%</span></div>
+              <div class="bar-line"><span>关闭 Chunking（每次切换硬跳变）</span><div class="bar-track"><div class="bar-fill" style="width:24%;background:#ef4444"></div></div><span class="bar-val">24%</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="bench-group-label"><span>② 解码器生成范式（同样 8 层 Transformer 骨干）</span><small>Regression 会过拟合且丢失关节细节导致滑步</small></div>
+            <div class="bar-group">
+              <div class="bar-line"><span><strong>Flow Matching DiT（HALO）</strong></span><div class="bar-track"><div class="bar-fill" style="width:84%;background:var(--accent)"></div></div><span class="bar-val">84%</span></div>
+              <div class="bar-line"><span>Regression 直接回归解码器</span><div class="bar-track"><div class="bar-fill" style="width:19%;background:#ef4444"></div></div><span class="bar-val">19%</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="bench-group-label"><span>③ 训练房间数量规模效应（固定动作总量不变）</span><small>验证程序化场景多样性对泛化的决定作用</small></div>
+            <div class="bar-group">
+              <div class="bar-line"><span><strong>1,000 个训练房间（HALO）</strong></span><div class="bar-track"><div class="bar-fill" style="width:84%;background:var(--orch)"></div></div><span class="bar-val">84%</span></div>
+              <div class="bar-line"><span>100 个训练房间</span><div class="bar-track"><div class="bar-fill" style="width:81%;background:#818cf8"></div></div><span class="bar-val">81%</span></div>
+              <div class="bar-line"><span>10 个训练房间</span><div class="bar-track"><div class="bar-fill" style="width:64%;background:#94a3b8"></div></div><span class="bar-val">64%</span></div>
+              <div class="bar-line"><span>仅 1 个训练房间</span><div class="bar-track"><div class="bar-fill" style="width:43%;background:#ef4444"></div></div><span class="bar-val">43%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p><strong>4. 更精彩的发现：作者其实试过全量微调 <code>Qwen3.5-2B</code>，结果差点“训废了”！（Appendix G-1）</strong></p>
+      <div class="contrast-grid">
+        <div class="contrast-card good">
+          <h4>✓ 冻结 Qwen3.5-2B（最终方案）</h4>
+          <ul>
+            <li><strong>保住真实世界零样本泛化：</strong>哪怕合成数据里“跟随人”只用了 1 个虚拟假人模型，上真机面对各种高矮胖瘦、不同衣着的真人照样全认识。</li>
+            <li><strong>严格听从语言指令：</strong>不会因为画面里有椅子就无脑坐下。</li>
+            <li><strong>推理轻快：</strong>Mac mini 上整套推理仅 <code>152ms</code>。唯一短板是对 <code>39°</code> 与 <code>40°</code> 这种极微小方位变化不够敏感。</li>
+          </ul>
+        </div>
+        <div class="contrast-card bad">
+          <h4>✗ 微调 Qwen3.5-2B（踩中两大深坑）</h4>
+          <ul>
+            <li><strong>优势：</strong>保留了精细像素坐标，“跟随行人”时转向响应更灵敏顺滑。</li>
+            <li><strong>深坑 1（灾难性过拟合）：</strong>微调后上真机<strong>只认识长得像训练假人的人</strong>！被迫用 <code>Hunyuan3D</code> 生成大批不同 3D 人物重渲数据才救回来。</li>
+            <li><strong>深坑 2（视觉捷径忽略语言）：</strong>因为训练图有椅子大概率配“坐下”，模型学会了<strong>只看图猜动作、无视文本命令</strong>！被迫将 30% 训练图像涂成纯黑帧逼它读文本才修好。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-Q3 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 3</span>
+        <span>主流 System 0 全身 RL Tracker 几乎都不看视觉，HALO 是怎么把深度相机塞进 RL 的？</span>
+      </div>
+      <p><strong>为什么必须看深度？</strong>以往通用全身跟踪器（如 OmniH2O、ASAP、BeyondMimic）默认地面平整或参考轨迹绝对准确。但在未建模的真实家庭里，中层单目 RGB 规划必然存在几厘米高度/距离误差——盲视 Tracker 会一屁股坐空摔倒，或对着空气挥手“假推箱子”（消融去掉深度后，Sit 成功率从 <strong>84% 降至 74%</strong>）。</p>
+      <p><strong>为什么别人很难直接训出来？</strong>因为从零渲染深度跑多技能 RL，既会被渲染拖垮早期探索速度，又会因不同技能（走路 vs 爬行 vs 推箱子）奖励量级悬殊而互相破坏。HALO 在 <strong>Isaac Lab</strong> 中设计了<strong>三阶段渐进训练 + 双通道自遮挡渲染</strong>：</p>
+      <ul>
+        <li><strong>Phase 1 · 不看深度的分技能特权专家（PPO，单卡 8,192 环境）：</strong>按技能族分开训独立专家（平地移动/穿门/钻爬、推箱子、坐椅子）。专家<strong>完全不渲染深度图</strong>，直接读仿真器无噪特权状态 + 一张以双脚为高度基准的 <strong><code>17×11</code> 局部高程图（<code>1.6m × 1.0m</code>）</strong>，极速收敛；同时为推箱子加入<strong>手腕距离门控（0.3m 内）的物体位移奖励</strong>，杜绝空挥手骗分。</li>
+        <li><strong>Phase 2 · 多教师精准路由蒸馏（DAgger，单卡 4,096 环境）：</strong>将所有冻结专家蒸馏进<strong>同一个</strong>只看机载输入的学生网络（4 层 2D CNN 编码 <code>48×84</code> 深度图 + 3 层 1D CNN 编码 30 步本体历史 + <code>SimBa</code> 残差 MLP）。采用 20% 专家 + 80% 学生的混合 rollout，每个环境严格路由给对应技能专家计算动作 MSE，避免多专家动作平均导致动作变形。</li>
+        <li><strong>Phase 3 · 带深度渲染闭环的 Multi-Critic PPO 微调（4 × H100，16,384 环境）：</strong>开启深度闭环做 RL 微调以突破蒸馏上限。为解决“推箱子多了物体奖励导致总回报远高于走路”的梯度偏置，提出 <strong>Multi-Critic PPO</strong>：<strong>共享同一个视觉 Actor，但每个技能保留独立的特权 Critic，并在各自技能 Batch 内独立标准化 Advantage（均值归零、方差归一）</strong>后再更新共享策略。</li>
+        <li><strong>Two-Pass Warp Ray-caster 还原手脚自遮挡：</strong>普通仿真深度投射往往忽略机器人自身模型，导致低头看时能“透视”自己的手臂和大腿。HALO 用双通道 NVIDIA Warp 同时求交<strong>场景网格</strong>和<strong>机器人实时连杆网格</strong>取最近点，让策略在爬行、深蹲、推箱子时真实学会处理自身肢体遮挡。</li>
+      </ul>
+    </div>
+
+    <!-- Sub-Q4 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 4</span>
+        <span>它到底用了什么仿真器？Sim-to-Real 为什么能做到几乎零掉点（91% → 91%）？</span>
+      </div>
+      <p><strong>1. 四套仿真引擎协同分工（而非单一仿真器）：</strong></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>仿真/渲染引擎</th>
+              <th>承担环节</th>
+              <th>为什么选它？</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Blender 5.2 (Infinigen + Cycles)</strong></td>
+              <td>房间生成与光照烘焙</td>
+              <td>Cycles 离线光追逐帧渲染 3,200 万帧太慢（13.2 秒/帧），因此仅用 Cycles 将每个房间的全局光照<strong>一次性烘焙进物体自发光贴图（38.5 分钟/房）</strong>，新视角平均像素误差仅 1.5%。</td>
+            </tr>
+            <tr>
+              <td><strong>Isaac Sim 5.1</strong></td>
+              <td>第一视角鱼眼 RGB 合成</td>
+              <td>加载烘焙贴图后，以 56–87 ms/帧的高速渲染匹配真机 <code>OAK-1W</code> 鱼眼内参的 <code>1280×800</code> 视频（注：<code>Push</code> 任务在 MuJoCo 渲染）。</td>
+            </tr>
+            <tr>
+              <td><strong>Isaac Lab 2.3 (+ Warp)</strong></td>
+              <td>底层 Tracker 三阶段 RL</td>
+              <td>支持单机多卡最高 16,384 个并行物理环境与 25Hz GPU 双通道深度光线投射。</td>
+            </tr>
+            <tr>
+              <td><strong>MuJoCo</strong></td>
+              <td>上机前全栈闭环 Sim-to-Sim</td>
+              <td>运行与真机完全相同的多进程节点与通信中间件，按真实物理时钟把 152ms 模型推理延迟纳入闭环评测。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>2. 把 Sim-to-Real 压到零掉点的五大“魔鬼工程细节”（Appendix C-4 & G-2）：</strong></p>
+      <ol>
+        <li><strong>深度传感器“反向对齐”——用 AI 修复烂真机传感器：</strong>G1 原装 RealSense D435i 自带立体匹配充满红外散斑噪点与黑洞。团队没有在仿真里硬拟合脏噪声，而是<strong>直接关掉真机 D435i 的主动红外散斑投射器</strong>，把 30Hz 原始左右红外图喂给 Orin NX 上 TensorRT FP16 加速的轻量双目模型 <strong><code>LiteAnyStereo</code>（7.6M 参数）</strong>，在真机端直接算出如仿真般干净稠密的深度图（缺失像素映射至 2.5m 远平面，取 <code>log(1+d)</code>），从源头抹平了深度视觉鸿沟！</li>
+        <li><strong>精细电机系统辨识（SysID）与膝盖再生制动保护：</strong>开源 G1 URDF 漏了电池重量、低估了髋部转子惯量，且真机电机实测刚度仅标称值的 <code>78%–90%</code> 并带 <code>25–30ms</code> 环路延迟。团队在背负 Mac mini 的真机（<code>37.56 kg</code>）上跑开环轨迹辨识拟合参数，<strong>将关节跟踪误差直接砍掉 62%（26.9% → 10.1%）</strong>；按转子惯量解析设定统一 10Hz 自然频率 PD 增益，并专门加入<strong>膝关节负机械功率（再生制动 &gt;150W）惩罚</strong>，防止深蹲/坐下时触发硬件驱动器过流断电。</li>
+        <li><strong>“厚绒地毯 vs 光滑木地板”地面柔顺度随机化：</strong>只在刚性地面训出的策略踩上真实家庭的厚地毯时，脚会陷进绒毛 <code>1–2 cm</code>，策略误判为身体倾倒而疯狂碎步乱踩。Phase 3 专门随机化了<strong>地面接触刚度（<code>1.3–6.5 kN/m</code>）与阻尼</strong>，配合静立防滑惩罚，实现了地毯、瓷砖、滑木板和户外水泥地通吃。</li>
+        <li><strong>RGB 烘焙消反光 + 冻结 VLM 抗域偏：</strong>烘焙前将所有木质家具设为哑光材质（误差减半）并移除天花板防死黑，叠加冻结 <code>Qwen3.5-2B</code> 原生强大的跨域视觉鲁棒性。</li>
+        <li><strong>两级渐进域随机化 + 硬实时 C++ 进程：</strong>Phase 1/2 保持窄随机化防止专家动作保守，Phase 3 才围绕 SysID 真值放宽延迟（<code>15–40ms</code>）与物理扰动；真机控制环锁死独立 CPU 核（<code>SCHED_FIFO</code>）、零动态内存分配、无锁三缓冲（Lock-free Triple Buffers）通信，彻底消灭软件抖动。</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 03: 6 HIDDEN INSIGHTS ==================== -->
+  <section class="sec-card" id="sec-insights">
+    <div class="sec-header indigo">
+      <span class="sec-tag">Part 03 · 延伸洞察与幕后真相</span>
+      <div class="sec-title">还有哪些没问到、但对做具身智能极具启发的事情？</div>
+    </div>
+
+    <div class="insight-grid">
+      <div class="insight-card">
+        <span class="num-chip">洞察 01 · 合成数据的真实边界</span>
+        <h4>解放了“数据采集员”，但没解放“任务工程师”</h4>
+        <p>翻看附录 Table IV 会发现，6 个技能并非靠一句文本凭空生成：<code>Sit</code> 的落座关键帧抠自真机关节日志 + 33 条手写几何规则；<code>Crawl/Crouch</code> 先拿手机拍真人钻桌视频，经 <code>GVHMR</code> 提 3D 再人工手调 6 个关键帧；<code>Push</code> 后半段直接拼了一段真人动捕录像。HALO 真正跑通的是<strong>“极少量人类种子先验（1 条视频/几个关键帧） × 程序化放大 5 万倍”</strong>，每加新技能仍需人工写规则与关键帧。</p>
+      </div>
+
+      <div class="insight-card">
+        <span class="num-chip">洞察 02 · 长程掉点的真正死因</span>
+        <h4>多任务掉到 50%–60%，输在“交接视野盲区”</h4>
+        <p>单任务真机高达 91%，但 <code>Crouch → Go-To → Push</code> 真机掉到 50%。60% 的失败并非 VLM 规划出错，而是<strong>钻出桌子站起时头部朝向偏了，下一个目标箱子恰好不在 120° 视野内</strong>（或正对沙发坐错了位置）。由于中层模型无历史空间记忆（Spatial Memory），且缺少“原地转圈搜寻目标（Turn-in-place Search）”恢复原语，目标一出画链条即断。</p>
+      </div>
+
+      <div class="insight-card">
+        <span class="num-chip">洞察 03 · Apple 式端侧算力压榨</span>
+        <h4>背着 Mac mini 上真机 + 单 GPU 层间抢占调度</h4>
+        <p>相比笨重高功耗的 x86 工控机，64GB 统一内存的 Mac mini M4 Pro 轻松同时装下 35B 与 2B 模型。团队在 MLX 上手写了单线程调度器 <code>halo_serve</code>：当 <code>333ms</code> 周期的运动生成器到点时，直接<strong>在 35B 编排器神经网络层与层之间暂停抢占</strong>，优先算完运动规划（合跑延迟仅从 152ms 微增至 155ms），同时保底留给编排器 60% GPU 时间防饿死。</p>
+      </div>
+
+      <div class="insight-card">
+        <span class="num-chip">洞察 04 · 架构下一代演进方向</span>
+        <h4>中底层“36 维窄接口悖论”与触觉缺失</h4>
+        <p>作者在结论中坦承两大上限：① 中层传给底层的只有 36 维关节/骨盆轨迹，<strong>Tracker 完全不知道自己伸手是为了推箱子还是维持平衡</strong>，未来需传递“期望外部世界发生的状态变化”；② 全身无力觉/触觉反馈，一旦落座最后时刻椅面离开相机视野或物体被遮挡，只能靠惯性盲做，复杂灵巧接触亟需触觉融合。</p>
+      </div>
+
+      <div class="insight-card">
+        <span class="num-chip">洞察 05 · 数据资产解耦设计</span>
+        <h4>存“随机种子 + 2D 位姿”，而不是存几百 TB 死视频</h4>
+        <p>很多合成数据集存成渲染好的视频，一旦换机器人相机内参或改安装俯仰角就全废了。HALO 把每条数据存为极轻量的 <code>(房间 Seed, 动作轨迹, 放置位姿 x, y, θ)</code>，配合跨引擎误差 &lt;1% 的自发光烘焙贴图——未来换新机器人、换双目相机或换物理仿真器，只需重新高速光栅化回放一遍即可复用全部数据。</p>
+      </div>
+
+      <div class="insight-card">
+        <span class="num-chip">洞察 06 · 真机 RL 选模铁律</span>
+        <h4>“仿真总 Reward 高低”跟真机稳不稳几乎无关</h4>
+        <p>附录 G-2 给出了一条极具实战价值的经验：在挑 Checkpoint 上真机时，仿真原始总分相关性很弱；<strong>真正决定真机成败的核心指标是动作平滑惩罚（Action-rate Smoothness，<code>||a_t - a_{t-1}||^2</code>）</strong>。若放任高频微幅动作，上真机遇到 25–30ms 延迟与关节静摩擦耦合，脚踝和手腕会立刻产生刺耳的高频自激啸叫。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 04: OPEN SOURCE AUDIT ==================== -->
+  <section class="sec-card" id="sec-opensource">
+    <div class="sec-header amber">
+      <span class="sec-tag">Part 04 · 官方 GitHub 仓库逐项核查</span>
+      <div class="sec-title">它开源了吗？那 1,000 多个房间能直接拿来用吗？还有哪些保留？</div>
+    </div>
+
+    <p>经直接查验官方仓库 <a href="https://github.com/apple-aiml-research/ml-halo" target="_blank" rel="noopener"><code>github.com/apple-aiml-research/ml-halo</code></a> 源码树与各子模块文档：<strong>项目代码、硬件辨识资产与场景烘焙流水线已正式开源</strong>（采用 Apple 标准宽松源码许可，允许免费使用、修改与再分发源码或二进制，无“仅限非商业”硬限制，不附带专利授权）。</p>
+
+    <h3><span class="step-num amber">1</span>那 1,000 多个虚拟家庭场景怎么用？</h3>
+    <div class="contrast-grid">
+      <div class="contrast-card info">
+        <h4>📦 开箱即用的现成房间（内置 1 套）</h4>
+        <p>仓库 <code>assets/scenes/bedroom/</code> 下直接打包好了 <strong>1 套完整转好网格（<code>mesh/*.msh</code>）与贴图的卧室场景</strong>（含扶手椅、推箱子、房门与辨识版 G1 模型），安装 <code>pip install mujoco</code> 后可直接拖入查看器或跑闭环测试。</p>
+      </div>
+      <div class="contrast-card good">
+        <h4>🏗️ 2,200 个房间的 1:1 确定性配方与自动烘焙管线</h4>
+        <p>虽未提供几百 GB 打包好的现成网盘下载，但 <code>datagen/scene_gen/spec/</code> 直接给出了论文全套清单 <strong><code>scenes_single.json</code>（1,200 单间）</strong>、<strong><code>scenes_dual.json</code>（1,000 双间）</strong> 及 <code>render_scenes_1000.txt</code>，锁死了每个房间的随机种子与布局参数。<strong>单张 NVIDIA GPU（约 60GB 内存）平均 38.5 分钟即可自动建房并光追烘焙出 1 个通用 <code>.obj</code> / <code>.usdc</code> 房间</strong>，按需挑几十个种子跑一晚即可用于你自己的项目。</p>
+      </div>
+    </div>
+
+    <h3><span class="step-num amber">2</span>已开放的“宝藏模块” vs 未公开项全景清单</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:22%">模块 / 资产类别</th>
+            <th style="width:14%">开放状态</th>
+            <th style="width:24%">仓库对应路径</th>
+            <th>具体内容与复用价值说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>SysID 高精度 G1 模型与改装外壳 CAD</strong></td>
+            <td><span class="pill-ok">✓ 已完整开源</span></td>
+            <td><code>assets/robots/g1/</code><br><code>assets/objects/</code></td>
+            <td>含实测辨识好转子惯量、关节摩擦与力矩限制的 <code>g1_29dof_macmini_sysid.urdf/.xml/.json</code>、全身精细凸分解碰撞网格（<code>vhacd</code>），以及<strong>头部相机头盔 <code>helmet_assembly.stl</code>、Mac mini 背包壳 <code>mac_mini_backpack.stl</code></strong>、扶手椅/沙发/纸箱模型。做 G1 真机可直接白嫖。</td>
+          </tr>
+          <tr>
+            <td><strong>三阶段感知 RL 训练与硬实时 C++ 部署栈</strong></td>
+            <td><span class="pill-ok">✓ 已完整开源</span></td>
+            <td><code>tracker/training/</code><br><code>tracker/deploy_cpp/</code></td>
+            <td>完整包含 Isaac Lab 2.3 三阶段训练（<code>PreRL</code> 特权专家 → DAgger 蒸馏 → <code>PostRL</code> Multi-Critic 微调），以及 <strong>Jetson Orin NX 硬实时 C++ 部署代码（集成 TensorRT 与 <code>LiteAnyStereo</code> 双目深度重建）</strong>。</td>
+          </tr>
+          <tr>
+            <td><strong>33 项全身动作几何质检库</strong></td>
+            <td><span class="pill-ok">✓ 已完整开源</span></td>
+            <td><code>datagen/motion_gen/motion_check/</code></td>
+            <td>独立封装的 Python 质检包（含脚底打滑 <code>foot.py</code>、穿模碰撞 <code>collision.py</code>、动力学检查 <code>dynamics.py</code>、关节限位 <code>limits.py</code>），可直接拿去清洗任何人形动作生成数据。</td>
+          </tr>
+          <tr>
+            <td><strong>中层生成器训练 + 端侧抢占服务与通信库</strong></td>
+            <td><span class="pill-ok">✓ 已完整开源</span></td>
+            <td><code>generator/</code><br><code>orchestrator/</code><br><code>system/</code></td>
+            <td>含 <code>Qwen3.5-2B + DiT</code> 多机多卡训练代码、编排器 Prompt 状态机、Apple Silicon 单 GPU 抢占推理引擎 <code>halo_serve</code>、ZeroMQ/Protobuf 通信库 <code>halo_comm</code> 及 Web 实时监控面板。</td>
+          </tr>
+          <tr>
+            <td><strong>1,000+ 虚拟家庭场景烘焙流水线</strong></td>
+            <td><span class="pill-part">◐ 配方+脚本开源</span></td>
+            <td><code>datagen/scene_gen/</code></td>
+            <td>未直接托管几百 GB 成品网格包，但开源了全部 2,200 个房间的精确 Seed Manifest 与一键安装 Blender 5.2 + Infinigen + Cycles 光追烘焙导出脚本。</td>
+          </tr>
+          <tr>
+            <td><strong>动作合成与场景渲染数据管线</strong></td>
+            <td><span class="pill-warn">⚠ 仅开源 1 个技能</span></td>
+            <td><code>datagen/motion_gen/</code><br><code>datagen/render/</code></td>
+            <td><strong>关键保留项：</strong><code>datagen/</code> 目前<strong>只包含 <code>sit_on_chair</code>（坐椅子）这一条任务的完整动作合成代码</strong>；其余 5 个技能（推箱子、钻桌子、爬行、侧身过门、走向物体）的数据合成脚本未随仓附带，需自行参考扩展。</td>
+          </tr>
+          <tr>
+            <td><strong>训练好的策略权重与 300h 成品视频集</strong></td>
+            <td><span class="pill-no">✗ 未放出</span></td>
+            <td>需自行训练生成</td>
+            <td>仓库<strong>不附带任何训练好的 Generator（<code>.pt</code>）或 Tracker（<code>.onnx</code>）权重</strong>，也不附带 300 小时成品渲染数据集（上游开源底座 <code>Qwen3.5-2B</code>、<code>Qwen3.6-35B-A3B-4bit</code>、<code>Kimodo-G1-RP-v1</code> 由安装脚本从 Hugging Face 自动拉取）。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn-note">
+      <strong>动手复现建议：</strong>如果你的目标是<strong>直接复用它的场景或底层控制能力</strong>，性价比最高的三件事是：① 直接提取 <code>assets/robots/g1/</code> 里做完 SysID 的 G1 模型与 <code>tracker/deploy_cpp/</code> 的 <code>LiteAnyStereo</code> 实时深度控制栈；② 拿单卡跑 <code>datagen/scene_gen/</code> 按需烘焙几十个高质量光追室内 <code>.obj/.usdc</code> 场景；③ 直接把 <code>motion_check</code> 接入你自己的动作生成管线做自动清洗。
+    </div>
+  </section>
+
+  <footer>
+    <a href="../index.html">← 返回博客首页</a> · 整理自 Apple AIML Research 项目主页 <a href="https://apple-aiml-research.github.io/ml-halo/" target="_blank" rel="noopener">ml-halo</a>、论文 <a href="https://arxiv.org/abs/2611.06908" target="_blank" rel="noopener">arXiv:2611.06908</a> 与官方代码库 <a href="https://github.com/apple-aiml-research/ml-halo" target="_blank" rel="noopener">apple-aiml-research/ml-halo</a>
+  </footer>
+
+</main>
+
+</body>
+</html>

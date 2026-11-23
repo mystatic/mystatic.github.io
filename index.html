@@ -1,99 +1,271 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
-<meta charset="utf-8">
-
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="关于论文、机器人和智能系统的中文阅读笔记。">
-  <meta name="color-scheme" content="light">
-  <title>阅读笔记｜论文与智能系统</title>
-  <link rel="stylesheet" href="assets/site.css">
-  <script src="assets/categories.js" defer></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="关于具身智能、机器人系统分层（Agent / System 1 / System 0 / 硬件 / Product）与强化学习基础的技术阅读笔记。" />
+  <title>Reading Notes｜具身智能与机器人研究笔记</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('rn-theme');
+        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="assets/site.css?v=20261123" />
+  <script src="assets/site.js?v=20261123" defer></script>
 </head>
 <body>
-  <header class="site-header">
-    <div class="brand">READING NOTES</div>
-    <div class="header-note">论文 · 机器人 · 智能系统</div>
+  <!-- Sticky Minimalist Topbar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top" data-filter-module="latest" aria-label="Reading Notes 首页">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-title">Reading Notes</span>
+      </a>
+
+      <nav class="topbar-nav" aria-label="核心模块切换">
+        <button class="topbar-link is-active" type="button" data-filter-module="latest">最新更新</button>
+        <span class="topbar-sep" aria-hidden="true"></span>
+        <button class="topbar-link" type="button" data-filter-module="agent">Agent</button>
+        <button class="topbar-link" type="button" data-filter-module="system1">System 1</button>
+        <button class="topbar-link" type="button" data-filter-module="system0">System 0</button>
+        <button class="topbar-link" type="button" data-filter-module="hardware">硬件</button>
+        <button class="topbar-link" type="button" data-filter-module="rl">强化学习基础</button>
+        <button class="topbar-link" type="button" data-filter-module="robotics">机器人基础</button>
+        <button class="topbar-link" type="button" data-filter-module="product">Product</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <button id="searchTrigger" class="action-pill" type="button" aria-label="搜索全部文章">
+          <span>搜索</span>
+          <span class="kbd-hint">⌘K</span>
+        </button>
+        <button id="themeToggle" class="action-pill" type="button" aria-label="切换浅色与深色模式">
+          <span id="themeIcon" aria-hidden="true">◐</span>
+          <span id="themeLabel">深色</span>
+        </button>
+      </div>
+    </div>
   </header>
 
-  <main class="site-main">
-    <section class="hero" aria-labelledby="page-title">
-      <div class="eyebrow">Personal knowledge archive</div>
-      <h1 id="page-title">把复杂的东西，<br><span>读成可以复用的理解。</span></h1>
-      <p>这里记录论文、技术文章和系统机制的阅读笔记。重点放在问题是什么、方法怎样工作，以及证据能支持到哪里。</p>
+  <main id="top" class="page-main">
+    <!-- Editorial Hero + 3x2 Six-Module Quick Matrix -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-eyebrow">Personal Research Archive · Embodied AI &amp; Robotics</div>
+      <h1 id="hero-title" class="hero-title">Summer is coming.</h1>
+      <p class="hero-lead">
+        具身智能、机器人控制与强化学习研究笔记 —— 按「Agent · System 1 · System 0 · 硬件 · 强化学习基础 · 机器人基础 · Product」七大模块归档。
+      </p>
+
+      <!-- Core Modules Overview Matrix (Click any module to view its posts in place) -->
+      <div class="pillar-strip" role="navigation" aria-label="七大知识模块">
+        <button class="pillar-jump" type="button" data-filter-module="agent">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m1"></span>01 · STACK</span>
+            <span>2 篇</span>
+          </div>
+          <div class="pillar-jump-name">Agent</div>
+          <div class="pillar-jump-meta">
+            <span>Coding Agent · 技能演化 · 实验闭环</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+
+        <button class="pillar-jump" type="button" data-filter-module="system1">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m2"></span>02 · STACK</span>
+            <span>2 篇</span>
+          </div>
+          <div class="pillar-jump-name">System 1</div>
+          <div class="pillar-jump-meta">
+            <span>世界模型 · VLA/WAM · 工作流策略</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+
+        <button class="pillar-jump" type="button" data-filter-module="system0">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m3"></span>03 · STACK</span>
+            <span>2 篇</span>
+          </div>
+          <div class="pillar-jump-name">System 0</div>
+          <div class="pillar-jump-meta">
+            <span>全身运动跟踪 · 伺服轨迹 · MIT 力控</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+
+        <button class="pillar-jump" type="button" data-filter-module="hardware">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m4"></span>04 · PHYSICAL</span>
+            <span>1 篇</span>
+          </div>
+          <div class="pillar-jump-name">硬件</div>
+          <div class="pillar-jump-meta">
+            <span>谐波与行星减速器 · 关节透明度</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+
+        <button class="pillar-jump" type="button" data-filter-module="rl">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m5"></span>05 · FOUNDATION</span>
+            <span>2 篇</span>
+          </div>
+          <div class="pillar-jump-name">强化学习基础</div>
+          <div class="pillar-jump-meta">
+            <span>回报估计 · TD / GAE · Actor-Critic · PPO</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+
+        <button class="pillar-jump" type="button" data-filter-module="robotics">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m6"></span>06 · FOUNDATION</span>
+            <span>整理中</span>
+          </div>
+          <div class="pillar-jump-name">机器人基础</div>
+          <div class="pillar-jump-meta">
+            <span>运动学 · 动力学 · 坐标变换与控制</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+
+        <button class="pillar-jump" type="button" data-filter-module="product">
+          <div class="pillar-jump-top">
+            <span class="pillar-dot-group"><span class="mod-dot mod-dot--m7"></span>07 · PRODUCT</span>
+            <span>1 篇</span>
+          </div>
+          <div class="pillar-jump-name">Product</div>
+          <div class="pillar-jump-meta">
+            <span>具身标杆产品与开源项目拆解 · 架构选型 · 资产核查</span>
+            <span class="pillar-jump-arrow">→</span>
+          </div>
+        </button>
+      </div>
     </section>
 
-    <div class="rule" aria-hidden="true"></div>
+    <!-- Default View: Latest Updates (Homepage ends cleanly right after this) -->
+    <section id="latestView" class="latest-section latest-view" aria-labelledby="latest-heading">
+      <div class="section-head">
+        <div class="section-head-left">
+          <span class="section-kicker">Latest</span>
+          <h2 id="latest-heading" class="section-title">最新更新</h2>
+        </div>
+        <span class="section-note">点击上方任意模块可按分类查看全部 10 篇文章</span>
+      </div>
 
-    <section aria-labelledby="posts-title">
-      <div class="section-heading">
-        <h2 id="posts-title">最新文章</h2>
-        <p>按时间整理 · 持续更新</p>
+      <div class="latest-grid">
+        <!-- Featured Newest Post -->
+        <a class="featured-card" href="posts/apple-halo.html">
+          <div>
+            <div class="featured-meta">
+              <span class="badge-new badge-new--m7">NEW</span>
+              <span class="meta-date">2026.11.23</span>
+              <span>·</span>
+              <span>全景解读与问答</span>
+              <span>·</span>
+              <span>技术解读</span>
+            </div>
+            <h3 class="featured-title">Apple HALO：基于仿真的感知型人形机器人全身自主控制与开源拆解</h3>
+            <p class="featured-desc">
+              深度拆解 Apple AIML 人形机器人自主系统 HALO：从 1,000 间虚拟家庭合成数据管线与 0.5/3/50Hz 全机载三层控制栈，到冻结 2B 生成器、带深度 System 0 三阶段 RL、零掉点 Sim2Real 细节及开源资产清单。
+            </p>
+            <div class="featured-highlights">
+              <span class="highlight-chip">0.5/3/50Hz 全机载三层控制栈</span>
+              <span class="highlight-chip">四大底层技术追问与消融对比</span>
+              <span class="highlight-chip">1,000+ 房间与开源资产核查</span>
+            </div>
+          </div>
+
+          <div class="featured-footer">
+            <span class="module-tag">
+              <span class="mod-dot mod-dot--m7"></span>
+              07 · Product
+            </span>
+            <span class="read-cta">阅读全文 <span class="read-cta-arrow">↗</span></span>
+          </div>
+        </a>
+
+        <!-- Next 3 Recent Releases / Updates -->
+        <div class="recent-stack" aria-label="近期发布与更新">
+          <a class="recent-item" href="posts/aspire.html">
+            <div class="recent-item-top">
+              <span class="meta-date">2026.11.19</span>
+              <span>技术解读 · 3 组交互与技能对照</span>
+            </div>
+            <h3 class="recent-item-title">ASPIRE：当 Coding Agent 接管机器人控制与技能演化</h3>
+            <div class="recent-item-sub">
+              <span class="module-tag"><span class="mod-dot mod-dot--m1"></span>01 · Agent</span>
+              <span class="read-cta-arrow">↗</span>
+            </div>
+          </a>
+
+          <a class="recent-item" href="posts/enpire.html">
+            <div class="recent-item-top">
+              <span class="meta-date">2026.11.16</span>
+              <span>技术解读 · 9 段演示</span>
+            </div>
+            <h3 class="recent-item-title">ENPIRE：机器人怎样通过真实实验改进策略</h3>
+            <div class="recent-item-sub">
+              <span class="module-tag"><span class="mod-dot mod-dot--m1"></span>01 · Agent</span>
+              <span class="read-cta-arrow">↗</span>
+            </div>
+          </a>
+
+          <a class="recent-item" href="posts/gr00t-2.html">
+            <div class="recent-item-top">
+              <span class="meta-date">2026.11.14</span>
+              <span>技术解读 · 28 段演示</span>
+            </div>
+            <h3 class="recent-item-title">GR00T 2：从联合想象与动作，到强化学习、Agent 和全身控制</h3>
+            <div class="recent-item-sub">
+              <span class="module-tag"><span class="mod-dot mod-dot--m2"></span>02 · System 1</span>
+              <span class="read-cta-arrow">↗</span>
+            </div>
+          </a>
+        </div>
       </div>
-      <div id="post-filters" class="post-filters" role="group" aria-label="按主分类筛选文章" hidden></div>
-      <p id="filter-status" class="filter-status" role="status" hidden></p>
-      <div class="posts">
-        <a class="post-card" data-category="机器人" data-format="技术解读" href="posts/aspire.html">
-          <div class="post-meta"><span>2026.11.19</span><span>约 15–20 分钟 · 3 组交互与技能原文对照</span></div>
-          <h3>ASPIRE：当 Coding Agent 接管机器人控制与技能演化</h3><p>从多模态闭环排障、渐进式查阅 SKILL.md 与逐块生长 policy.py 讲起，再逐字解剖 BEHAVIOR-1K 抓取技能样本，辨析仿真怪癖过滤、跨本体迁移与新场景摸索边界。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：机器人">机器人</span><span class="tag format-tag" aria-label="文章形式：技术解读">技术解读</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="机器人" data-format="技术解读" href="posts/enpire.html">
-          <div class="post-meta"><span>2026.11.16</span><span>机制长文 · 架构图与 9 段官方演示</span></div>
-          <h3>ENPIRE：机器人怎样通过真实实验改进策略</h3><p>用一张模块架构图串起环境复位与核验、编码 Agent、BC／RL 学习器和真机执行，再沿插销实例解释三层循环、并行研究与实验依据。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：机器人">机器人</span><span class="tag format-tag" aria-label="文章形式：技术解读">技术解读</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="机器人" data-format="技术解读" href="posts/gr00t-2.html">
-          <div class="post-meta"><span>2026.11.14</span><span>机制长文 · 28 段官方演示</span></div>
-          <h3>GR00T 2：从联合想象与动作，到强化学习、Agent 和全身控制</h3>
-          <p>沿数据与动作的流向，理解世界—动作模型怎样联合生成视频与动作，再拆解跨具身迁移、强化学习、长任务 Agent 和人形全身控制。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：机器人">机器人</span><span class="tag format-tag" aria-label="文章形式：技术解读">技术解读</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="机器人" data-format="交互教程" href="posts/pp-vs-csp.html">
-          <div class="post-meta"><span>2026.11.11 · 更新 2026.11.13</span><span>约 18–22 分钟 · 3 组交互</span></div>
-          <h3>PP、CSP 与 MIT：从轨迹规划到力矩控制</h3>
-          <p>从 PP/CSP 的轨迹分工，到 MIT 动态闭环与力矩分解，再用未知负载实验理解前馈、角度误差与重心辨识。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：机器人">机器人</span><span class="tag format-tag" aria-label="文章形式：交互教程">交互教程</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="强化学习" data-format="学习笔记" href="posts/supermimic-learning/">
-          <div class="post-meta"><span>2026.11.11</span><span>约 35–45 分钟 · 9 章学习笔记</span></div>
-          <h3>SuperMimic 学习笔记：从运动跟踪到可微世界模型</h3>
-          <p>从参考运动和仿真数据开始，沿七行时间流看懂世界模型、Actor 与 Critic 怎样更新，再依据论文实验解释训练速度、研究贡献与实机边界。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：强化学习">强化学习</span><span class="tag format-tag" aria-label="文章形式：学习笔记">学习笔记</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="强化学习" data-format="交互教程" href="posts/ppo-training-explainer/">
-          <div class="post-meta"><span>2026.11.10</span><span>约 30–45 分钟 · 8 章交互教程</span></div>
-          <h3>PPO 如何学会稳住倒立摆</h3>
-          <p>从一次 episode 跟到采样、reset、GAE 与同批数据的十轮学习，再用真实奖励曲线和训练前后对比，看懂 PPO 怎样逐渐学会平衡。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：强化学习">强化学习</span><span class="tag format-tag" aria-label="文章形式：交互教程">交互教程</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="机器人" data-format="交互教程" href="posts/gearboxes-joint-transparency-sim2real.html">
-          <div class="post-meta"><span>2026.11.10</span><span>约 10–15 分钟 · 3 个交互实验</span></div>
-          <h3>谐波、行星与透明度：看懂机器人关节和 sim2real</h3>
-          <p>从扭矩和减速器讲起，用机构动画、外力推动与控制响应实验，理解关节透明度，以及“谐波是否让强化学习更难落地”的结论与边界。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：机器人">机器人</span><span class="tag format-tag" aria-label="文章形式：交互教程">交互教程</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="强化学习" data-format="学习笔记" href="posts/rl-learning-notes.html">
-          <div class="post-meta"><span>2026.11.06</span><span>约 30 分钟</span></div>
-          <h3>从回报到 Actor-Critic · RL 学习笔记</h3>
-          <p>沿着采样回报、状态价值、TD、GAE 和 PPO 的主线，梳理强化学习从轨迹估计到 Actor-Critic 联合优化的核心概念。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：强化学习">强化学习</span><span class="tag format-tag" aria-label="文章形式：学习笔记">学习笔记</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <a class="post-card" data-category="机器人" data-format="技术解读" href="posts/dyna-2-1-summary.html">
-          <div class="post-meta"><span>2026.10.28</span><span>约 12 分钟</span></div>
-          <h3>Dyna-2.1：从单项技能到完整工作流</h3>
-          <p>拆解 Taku、三层架构、URR、人类数据和工作流记忆，梳理一个物理智能体如何从“会做动作”走向“完成一项工作”。</p>
-          <div class="post-footer"><span class="post-tags"><span class="tag" aria-label="主分类：机器人">机器人</span><span class="tag format-tag" aria-label="文章形式：技术解读">技术解读</span></span><span>阅读全文&nbsp; ↗</span></div>
-        </a>
-        <div class="empty-note">下一篇阅读笔记正在整理中。</div>
+    </section>
+
+    <!-- In-Place Filtered Module View (Only appears when clicking one of the 6 modules) -->
+    <section id="filteredView" class="latest-section filtered-view" hidden aria-live="polite">
+      <div class="section-head">
+        <div class="section-head-left">
+          <span id="filteredKicker" class="section-kicker">MODULE</span>
+          <h2 id="filteredTitle" class="section-title">模块文章</h2>
+        </div>
+        <button id="backLatestBtn" class="back-latest-btn" type="button">← 返回最新更新</button>
       </div>
+      <p id="filteredDesc" class="filtered-desc"></p>
+      <div id="filteredList" class="filtered-list"></div>
     </section>
   </main>
 
   <footer class="site-footer">
     <span>© 2026 Reading Notes</span>
-    <a href="https://github.com/mystatic/mystatic.github.io">在 GitHub 上查看源码 ↗</a>
+    <div class="footer-links">
+      <a href="https://github.com/mystatic/mystatic.github.io" target="_blank" rel="noopener">GitHub 源码 ↗</a>
+    </div>
   </footer>
+
+  <!-- Spotlight Quick Search Modal -->
+  <div id="searchBackdrop" class="search-backdrop" hidden role="dialog" aria-modal="true" aria-label="快速搜索文章">
+    <div class="search-dialog">
+      <div class="search-input-bar">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="searchInput" class="search-input" type="search" placeholder="搜索文章标题、模块（如 Agent / System 0）或关键词…" autocomplete="off" />
+        <button id="searchClose" class="kbd-hint" type="button">ESC</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+  </div>
 </body>
 </html>

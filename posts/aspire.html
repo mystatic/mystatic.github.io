@@ -1,40 +1,64 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
-
-  
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="解读 NVIDIA GEAR Lab ASPIRE（arXiv:2607.00272）：从闭环多模态排障、渐进式查阅 SKILL.md 与逐块生长 policy.py，到 BEHAVIOR-1K 抓取技能逐字解剖、仿真怪癖过滤与新场景摸索边界。">
-  <meta name="color-scheme" content="light">
   <meta name="category" content="机器人">
   <meta property="article:section" content="机器人">
   <meta name="article-format" content="技术解读">
-  <title>ASPIRE：当 Coding Agent 接管机器人控制与技能演化｜阅读笔记</title>
+  <title>ASPIRE：当 Coding Agent 接管机器人控制与技能演化｜Reading Notes</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('rn-theme');
+        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
     :root {
-      --paper: #f5f3ed;
-      --white: #fffefb;
-      --ink: #233830;
-      --ink-soft: #405249;
-      --muted: #65756d;
-      --line: #d8ded5;
-      --line-strong: #bfc9bc;
-      --green: #38654f;
-      --green-dark: #294c3b;
-      --mint: #e7eee4;
-      --mint-soft: #f0f4ed;
-      --orange: #a95731;
-      --sand: #f4e9d9;
-      --code-bg: #f8f7f2;
+      --paper: #fcfcfd;
+      --white: #ffffff;
+      --ink: #0f172a;
+      --ink-soft: #334155;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --green: #0f766e;
+      --green-dark: #0d9488;
+      --mint: #f0fdfa;
+      --mint-soft: #f1f5f9;
+      --orange: #b45309;
+      --sand: #fffbeb;
+      --code-bg: #f8fafc;
       --radius: 16px;
       --radius-sm: 10px;
-      --mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, monospace;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    [data-theme="dark"] {
+      --paper: #0b1120;
+      --white: #111827;
+      --ink: #f1f5f9;
+      --ink-soft: #cbd5e1;
+      --muted: #94a3b8;
+      --line: #1e293b;
+      --line-strong: #334155;
+      --green: #2dd4bf;
+      --green-dark: #5eead4;
+      --mint: rgba(45, 212, 191, 0.1);
+      --mint-soft: #162033;
+      --orange: #fbbf24;
+      --sand: rgba(251, 191, 36, 0.12);
+      --code-bg: #0f172a;
     }
 
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; scroll-padding-top: 28px; }
+    html { scroll-behavior: smooth; scroll-padding-top: 84px; }
     body {
       margin: 0;
       background: var(--paper);
@@ -44,13 +68,14 @@
       line-height: 1.85;
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
+      transition: background-color 0.22s ease, color 0.22s ease;
     }
 
     a { color: var(--green); text-underline-offset: 4px; }
     a:hover { color: var(--green-dark); }
     button { font: inherit; cursor: pointer; }
-    button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
-    ::selection { background: #cfdec8; }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+    ::selection { background: rgba(15, 118, 110, 0.2); }
 
     /* Top Reading Progress */
     .progress-track {
@@ -59,8 +84,8 @@
       left: 0;
       right: 0;
       height: 3px;
-      background: rgba(216, 222, 213, 0.55);
-      z-index: 90;
+      background: transparent;
+      z-index: 120;
     }
     .progress-bar {
       height: 100%;
@@ -69,12 +94,21 @@
       transition: width 0.08s linear;
     }
 
-    /* Site Header */
-    .top-header {
-      max-width: 1160px;
-      margin: 0 auto;
-      padding: 24px 32px;
+    /* Sticky Frosted Site Header */
+    .top-header-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: color-mix(in srgb, var(--paper) 85%, transparent);
       border-bottom: 1px solid var(--line);
+    }
+    .top-header {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 32px;
+      height: 64px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -82,15 +116,40 @@
       font-size: 13px;
     }
     .blog-home {
-      font-weight: 650;
+      font-weight: 600;
+      color: var(--ink);
       text-decoration: none;
-      letter-spacing: 0.02em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
-    .blog-home:hover { text-decoration: underline; }
+    .blog-home:hover { color: var(--green); }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
     .header-meta {
       color: var(--muted);
-      font-size: 12px;
-      letter-spacing: 0.04em;
+      font-size: 12.5px;
+    }
+    .theme-toggle-btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--ink-soft);
+      font-size: 12.5px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: border-color 0.16s ease, color 0.16s ease;
+    }
+    .theme-toggle-btn:hover {
+      border-color: var(--line-strong);
+      color: var(--ink);
     }
 
     /* Hero Section */
@@ -232,7 +291,7 @@
     /* Left Sticky TOC */
     .toc-aside {
       position: sticky;
-      top: 28px;
+      top: 92px;
       align-self: start;
       min-width: 0;
     }
@@ -353,7 +412,7 @@
       font-family: var(--mono);
       font-size: 0.87em;
       background: var(--mint-soft);
-      border: 1px solid #dce3d9;
+      border: 1px solid var(--line);
       color: var(--ink);
       padding: 1px 6px;
       border-radius: 5px;
@@ -400,7 +459,7 @@
       border-bottom: none;
     }
     .data-table tr.row-accent td {
-      background: #f6f9f4;
+      background: var(--mint);
       color: var(--ink);
     }
 
@@ -685,7 +744,7 @@
     .meter-head span.orange-txt { color: var(--orange); }
     .meter-rail {
       height: 8px;
-      background: #e6ebe2;
+      background: var(--mint-soft);
       border-radius: 999px;
       overflow: hidden;
     }
@@ -828,7 +887,7 @@
       background: var(--white);
       min-width: 0;
     }
-    .bi-box.zh { background: #fafbf8; }
+    .bi-box.zh { background: var(--mint-soft); }
     .bi-tag {
       display: block;
       font-family: var(--mono);
@@ -859,11 +918,11 @@
       min-width: 0;
     }
     .xray-col.quirk {
-      background: #fdfaf5;
+      background: var(--sand);
       border-top: 3px solid var(--orange);
     }
     .xray-col.law {
-      background: #f8fbf7;
+      background: var(--mint);
       border-top: 3px solid var(--green);
     }
     .xray-entry {
@@ -1042,10 +1101,18 @@
     <div class="progress-bar" id="readingProgress"></div>
   </div>
 
-  <header class="top-header">
-    <a class="blog-home" href="https://mystatic.github.io/">← 阅读笔记首页</a>
-    <span class="header-meta">机器人 · 技术解读 · Code-as-Policy 与持续技能发现</span>
-  </header>
+  <div class="top-header-bar">
+    <header class="top-header">
+      <a class="blog-home" href="../index.html">← 返回研究主页</a>
+      <div class="header-right">
+        <span class="header-meta">01 · Agent · 技术解读</span>
+        <button type="button" class="theme-toggle-btn" id="articleThemeToggle" aria-label="切换浅色与深色模式">
+          <span id="articleThemeIcon" aria-hidden="true">◐</span>
+          <span id="articleThemeLabel">深色</span>
+        </button>
+      </div>
+    </header>
+  </div>
 
   <section class="hero" aria-labelledby="article-title">
     <div class="eyebrow">机器人 / 技术解读 · NVIDIA GEAR Lab</div>
@@ -1192,51 +1259,51 @@
               <svg id="aspireArchSvg" viewBox="0 0 920 182" style="width:100%;height:auto;display:block" role="img" aria-label="ASPIRE 三大核心支柱与多模态闭环数据流">
                 <defs>
                   <marker id="mkGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#38654f" />
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--green)" />
                   </marker>
                   <marker id="mkOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#a95731" />
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--orange)" />
                   </marker>
                 </defs>
                 <!-- Box 1: Skill Library -->
-                <rect x="12" y="24" width="202" height="122" rx="10" fill="#fffefb" stroke="#38654f" stroke-width="1.6" />
-                <text x="26" y="48" fill="#38654f" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 02 · SKILL LIBRARY</text>
-                <text x="26" y="70" fill="#233830" font-size="13.5" font-weight="bold">可复用技能库 (SKILL.md)</text>
-                <text x="26" y="92" fill="#405249" font-size="11.5">• 故障特征 Failure Signature</text>
-                <text x="26" y="111" fill="#405249" font-size="11.5">• 适用守卫 When-to-Apply</text>
-                <text x="26" y="130" fill="#405249" font-size="11.5">• 修复骨架 Repair Sketches</text>
+                <rect x="12" y="24" width="202" height="122" rx="10" fill="var(--white)" stroke="var(--green)" stroke-width="1.6" />
+                <text x="26" y="48" fill="var(--green)" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 02 · SKILL LIBRARY</text>
+                <text x="26" y="70" fill="var(--ink)" font-size="13.5" font-weight="bold">可复用技能库 (SKILL.md)</text>
+                <text x="26" y="92" fill="var(--ink-soft)" font-size="11.5">• 故障特征 Failure Signature</text>
+                <text x="26" y="111" fill="var(--ink-soft)" font-size="11.5">• 适用守卫 When-to-Apply</text>
+                <text x="26" y="130" fill="var(--ink-soft)" font-size="11.5">• 修复骨架 Repair Sketches</text>
 
                 <!-- Arrow 1 -> 2 -->
-                <line x1="214" y1="64" x2="274" y2="64" stroke="#38654f" stroke-width="1.8" marker-end="url(#mkGreen)" />
-                <text x="220" y="55" fill="#38654f" font-size="10.5">按需检索</text>
+                <line x1="214" y1="64" x2="274" y2="64" stroke="var(--green)" stroke-width="1.8" marker-end="url(#mkGreen)" />
+                <text x="220" y="55" fill="var(--green)" font-size="10.5">按需检索</text>
 
                 <!-- Box 2: Agent + EvoSearch -->
-                <rect x="278" y="24" width="238" height="122" rx="10" fill="#e7eee4" stroke="#38654f" stroke-width="1.6" />
-                <text x="294" y="48" fill="#38654f" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 03 · AGENT + EVOSEARCH</text>
-                <text x="294" y="70" fill="#233830" font-size="13.5" font-weight="bold">Coding Agent 演化编程</text>
-                <text x="294" y="92" fill="#233830" font-size="11.5">• 逐块生长 policy.py (# Block N)</text>
-                <text x="294" y="111" fill="#233830" font-size="11.5">• 并行变异探索多条候选策略</text>
-                <text x="294" y="130" fill="#233830" font-size="11.5">• 诊断轨迹并合成修复补丁</text>
+                <rect x="278" y="24" width="238" height="122" rx="10" fill="var(--mint)" stroke="var(--green)" stroke-width="1.6" />
+                <text x="294" y="48" fill="var(--green)" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 03 · AGENT + EVOSEARCH</text>
+                <text x="294" y="70" fill="var(--ink)" font-size="13.5" font-weight="bold">Coding Agent 演化编程</text>
+                <text x="294" y="92" fill="var(--ink)" font-size="11.5">• 逐块生长 policy.py (# Block N)</text>
+                <text x="294" y="111" fill="var(--ink)" font-size="11.5">• 并行变异探索多条候选策略</text>
+                <text x="294" y="130" fill="var(--ink)" font-size="11.5">• 诊断轨迹并合成修复补丁</text>
 
                 <!-- Arrow 2 -> 3 -->
-                <line x1="516" y1="64" x2="580" y2="64" stroke="#38654f" stroke-width="1.8" marker-end="url(#mkGreen)" />
-                <text x="521" y="55" fill="#38654f" font-size="10.5">调用原语 API</text>
+                <line x1="516" y1="64" x2="580" y2="64" stroke="var(--green)" stroke-width="1.8" marker-end="url(#mkGreen)" />
+                <text x="521" y="55" fill="var(--green)" font-size="10.5">调用原语 API</text>
 
                 <!-- Box 3: Execution Engine -->
-                <rect x="584" y="24" width="324" height="122" rx="10" fill="#fffefb" stroke="#bfc9bc" stroke-width="1.6" />
-                <text x="600" y="48" fill="#a95731" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 01 · CLOSED-LOOP ENGINE</text>
-                <text x="600" y="70" fill="#233830" font-size="13.5" font-weight="bold">闭环多模态机器人执行引擎</text>
-                <text x="600" y="92" fill="#405249" font-size="11.5">• 模块工具链：SAM3 分割 / AnyGrasp / cuRobo</text>
-                <text x="600" y="111" fill="#405249" font-size="11.5">• 权限隔离：禁止读取仿真器特权真值坐标作弊</text>
-                <text x="600" y="130" fill="#a95731" font-size="11.5">• 暴露：视觉 Overlay + 抓取分布 + 碰撞规划报错</text>
+                <rect x="584" y="24" width="324" height="122" rx="10" fill="var(--white)" stroke="var(--line-strong)" stroke-width="1.6" />
+                <text x="600" y="48" fill="var(--orange)" font-size="10.5" font-weight="bold" font-family="monospace">PILLAR 01 · CLOSED-LOOP ENGINE</text>
+                <text x="600" y="70" fill="var(--ink)" font-size="13.5" font-weight="bold">闭环多模态机器人执行引擎</text>
+                <text x="600" y="92" fill="var(--ink-soft)" font-size="11.5">• 模块工具链：SAM3 分割 / AnyGrasp / cuRobo</text>
+                <text x="600" y="111" fill="var(--ink-soft)" font-size="11.5">• 权限隔离：禁止读取仿真器特权真值坐标作弊</text>
+                <text x="600" y="130" fill="var(--orange)" font-size="11.5">• 暴露：视觉 Overlay + 抓取分布 + 碰撞规划报错</text>
 
                 <!-- Feedback 3 -> 2 -->
-                <path d="M 746 146 L 746 168 L 397 168 L 397 148" fill="none" stroke="#a95731" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#mkOrange)" />
-                <text x="478" y="163" fill="#a95731" font-size="10.5">细粒度多模态执行轨迹反馈 (Multimodal Execution Traces)</text>
+                <path d="M 746 146 L 746 168 L 397 168 L 397 148" fill="none" stroke="var(--orange)" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#mkOrange)" />
+                <text x="478" y="163" fill="var(--orange)" font-size="10.5">细粒度多模态执行轨迹反馈 (Multimodal Execution Traces)</text>
 
                 <!-- Distill 2 -> 1 -->
-                <line x1="278" y1="112" x2="218" y2="112" stroke="#38654f" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#mkGreen)" />
-                <text x="219" y="128" fill="#38654f" font-size="10">验证后蒸馏</text>
+                <line x1="278" y1="112" x2="218" y2="112" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#mkGreen)" />
+                <text x="219" y="128" fill="var(--green)" font-size="10">验证后蒸馏</text>
               </svg>
             </div>
           </button>
@@ -1775,8 +1842,8 @@
   </div>
 
   <footer class="page-footer">
-    <span>© 2026 Reading Notes · 机器人与智能系统阅读笔记</span>
-    <a href="https://mystatic.github.io/">返回阅读笔记首页 ↗</a>
+    <span>© 2026 Reading Notes · 论文、机器人与智能系统阅读归档</span>
+    <a href="../index.html">返回研究主页 ↗</a>
   </footer>
 
   <!-- SVG Zoom Modal -->
@@ -1998,6 +2065,25 @@ No code-level fix available. The gripper physics and object shape determine whet
 
   <script>
     (function () {
+      // 0. Theme Toggle Sync (rn-theme)
+      var themeBtn = document.getElementById("articleThemeToggle");
+      var themeIcon = document.getElementById("articleThemeIcon");
+      var themeLabel = document.getElementById("articleThemeLabel");
+      function syncThemeUI() {
+        var isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        if (themeIcon) themeIcon.textContent = isDark ? "☀" : "◐";
+        if (themeLabel) themeLabel.textContent = isDark ? "浅色" : "深色";
+      }
+      syncThemeUI();
+      if (themeBtn) {
+        themeBtn.addEventListener("click", function () {
+          var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+          document.documentElement.setAttribute("data-theme", next);
+          try { localStorage.setItem("rn-theme", next); } catch (e) {}
+          syncThemeUI();
+        });
+      }
+
       // 1. Verbatim Markdown Render & Copy
       var rawEl = document.getElementById("verbatim-grasping-md");
       var verbatimDisplay = document.getElementById("verbatimDisplay");
