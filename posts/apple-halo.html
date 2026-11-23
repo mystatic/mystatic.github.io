@@ -1200,16 +1200,92 @@
     <div class="sub-qa">
       <div class="sub-qa-q">
         <span class="q-badge">追问 3</span>
-        <span>主流 System 0 全身 RL Tracker 几乎都不看视觉，HALO 是怎么把深度相机塞进 RL 的？</span>
+        <span>主流 System 0 全身 RL Tracker 几乎都不看视觉，HALO 的 <code>PreRL → Distillation → PostRL</code> 三阶段训练是怎么做到的？</span>
       </div>
-      <p><strong>为什么必须看深度？</strong>以往通用全身跟踪器（如 OmniH2O、ASAP、BeyondMimic）默认地面平整或参考轨迹绝对准确。但在未建模的真实家庭里，中层单目 RGB 规划必然存在几厘米高度/距离误差——盲视 Tracker 会一屁股坐空摔倒，或对着空气挥手“假推箱子”（消融去掉深度后，Sit 成功率从 <strong>84% 降至 74%</strong>）。</p>
-      <p><strong>为什么别人很难直接训出来？</strong>因为从零渲染深度跑多技能 RL，既会被渲染拖垮早期探索速度，又会因不同技能（走路 vs 爬行 vs 推箱子）奖励量级悬殊而互相破坏。HALO 在 <strong>Isaac Lab</strong> 中设计了<strong>三阶段渐进训练 + 双通道自遮挡渲染</strong>：</p>
+      <p><strong>1. 为什么底层 Tracker 必须看深度（且必须还原自身手脚遮挡）？</strong><br>
+      以往通用全身跟踪器（如 OmniH2O、ASAP、BeyondMimic）默认地面平整或参考轨迹绝对准确。但在未建模的真实家庭里，中层单目 RGB 规划必然存在几厘米的高度或距离偏差——盲视 Tracker 会一屁股坐空摔倒，或对着空气挥手“假推箱子”（消融去掉深度后，Sit 成功率从 <strong>84% 降至 74%</strong>）。此外，常规仿真光线投射往往忽略机器人自身网格，低头看时会“透视”自己的大腿和手臂；HALO 采用 <strong>Two-Pass NVIDIA Warp 双通道光线投射</strong>同时求交场景网格与机器人实时连杆网格取最近点，让策略在爬行、深蹲、推箱子时真实学会处理肢体自遮挡。</p>
+
+      <p><strong>2. 为什么要大费周章搞“三阶段”？（少一步都不行）</strong></p>
+      <div class="contrast-grid">
+        <div class="contrast-card bad">
+          <h4>✗ 为什么不能“一阶段”从零直接训？</h4>
+          <ul>
+            <li><strong>探索算力死锁：</strong>早期策略连站都站不稳，若从第 0 步就在上万个环境实时投射渲染深度图，仿真吞吐量直接腰斩。</li>
+            <li><strong>多技能负迁移与奖励打架：</strong>钻爬、坐沙发、推箱子的接触力学迥异，且“推箱子”多了物体位移奖励，总回报远高于纯走路，单 Critic 混训会导致梯度严重偏置、基础步态崩盘。</li>
+          </ul>
+        </div>
+        <div class="contrast-card info">
+          <h4>⚠ 为什么不能停在“两阶段”（训完蒸馏就结束）？</h4>
+          <ul>
+            <li><strong>能力上限被老师锁死：</strong>纯行为克隆 / DAgger 蒸馏永远无法超越特权教师。</li>
+            <li><strong>部分可观测性鸿沟：</strong>老师看的是无噪全局速度和真值高程图，而学生只有带噪 IMU 与有遮挡的 <code>48×84</code> 深度图，直接模仿会留下残余跟踪误差，且难以扛住真机厚地毯与大幅电机延迟，必须回到深度 RL 闭环做第三阶段淬炼。</li>
+          </ul>
+        </div>
+      </div>
+
+      <p><strong>3. 三阶段训练全流程参数对照表（论文 Table VI–VIII &amp; 开源库 <code>tracker/training</code>）：</strong></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>Phase 1：特权专家 (<code>PreRL</code>)</th>
+              <th>Phase 2：多教师蒸馏 (<code>Distillation</code>)</th>
+              <th>Phase 3：多 Critic 微调 (<code>PostRL</code>)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>核心优化算法</strong></td>
+              <td>标准 PPO（每类数据集独立训 1 个专家）</td>
+              <td>在线混合 DAgger（20% 老师 + 80% 学生）</td>
+              <td><strong>Multi-Critic PPO</strong>（共享视觉 Actor + 独立特权 Critics）</td>
+            </tr>
+            <tr>
+              <td><strong>环境规模 / 算力</strong></td>
+              <td>8,192 环境 × 1 张 H100（50k 迭代，<code>lr=1e-3</code>）</td>
+              <td>4,096 环境 × 1 张 H100（30k 迭代，<code>lr=1e-4</code>）</td>
+              <td><strong>16,384 环境 × 4 张 H100</strong>（50k 迭代，<code>lr=3e-4</code>）</td>
+            </tr>
+            <tr>
+              <td><strong>空间几何感知</strong></td>
+              <td><strong>不渲染深度</strong>；读取双脚基准 <code>17×11</code> 高程图</td>
+              <td>实时渲染 <code>48×84</code> 下视深度图（25Hz + 噪点遮挡）</td>
+              <td>实时渲染 <code>48×84</code> 下视深度图（25Hz + 噪点遮挡）</td>
+            </tr>
+            <tr>
+              <td><strong>本体与前瞻观测</strong></td>
+              <td>无噪全局速度/连杆 3D 位姿 + <code>10 帧 (0.2s)</code> 前瞻</td>
+              <td>仅带噪 IMU/关节 + 30 步历史 + <code>5 帧 (0.1s)</code> 前瞻</td>
+              <td>Actor 同 Phase 2 学生；各 Critic 仍读特权状态</td>
+            </tr>
+            <tr>
+              <td><strong>主干网络规模</strong></td>
+              <td>较大（<code>3×768</code> SimBa 残差 MLP + 1D/2D CNN）</td>
+              <td>轻量可部署（<code>2×512</code> SimBa MLP + 1D/2D CNN）</td>
+              <td>热启动自 Phase 2 学生（重置探索标准差 <code>std=0.2</code>）</td>
+            </tr>
+            <tr>
+              <td><strong>物理域随机化</strong></td>
+              <td>窄范围（刚性地面，5–25ms 延迟，保教师精度）</td>
+              <td>窄物理范围 + 开启深度相机偏移/丢包退化</td>
+              <td><strong>宽范围地狱模式</strong>（1/3 软地毯、6kg 重箱、15–40ms 抖动延迟）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>4. 三个阶段最关键的代码级工程细节：</strong></p>
       <ul>
-        <li><strong>Phase 1 · 不看深度的分技能特权专家（PPO，单卡 8,192 环境）：</strong>按技能族分开训独立专家（平地移动/穿门/钻爬、推箱子、坐椅子）。专家<strong>完全不渲染深度图</strong>，直接读仿真器无噪特权状态 + 一张以双脚为高度基准的 <strong><code>17×11</code> 局部高程图（<code>1.6m × 1.0m</code>）</strong>，极速收敛；同时为推箱子加入<strong>手腕距离门控（0.3m 内）的物体位移奖励</strong>，杜绝空挥手骗分。</li>
-        <li><strong>Phase 2 · 多教师精准路由蒸馏（DAgger，单卡 4,096 环境）：</strong>将所有冻结专家蒸馏进<strong>同一个</strong>只看机载输入的学生网络（4 层 2D CNN 编码 <code>48×84</code> 深度图 + 3 层 1D CNN 编码 30 步本体历史 + <code>SimBa</code> 残差 MLP）。采用 20% 专家 + 80% 学生的混合 rollout，每个环境严格路由给对应技能专家计算动作 MSE，避免多专家动作平均导致动作变形。</li>
-        <li><strong>Phase 3 · 带深度渲染闭环的 Multi-Critic PPO 微调（4 × H100，16,384 环境）：</strong>开启深度闭环做 RL 微调以突破蒸馏上限。为解决“推箱子多了物体奖励导致总回报远高于走路”的梯度偏置，提出 <strong>Multi-Critic PPO</strong>：<strong>共享同一个视觉 Actor，但每个技能保留独立的特权 Critic，并在各自技能 Batch 内独立标准化 Advantage（均值归零、方差归一）</strong>后再更新共享策略。</li>
-        <li><strong>Two-Pass Warp Ray-caster 还原手脚自遮挡：</strong>普通仿真深度投射往往忽略机器人自身模型，导致低头看时能“透视”自己的手臂和大腿。HALO 用双通道 NVIDIA Warp 同时求交<strong>场景网格</strong>和<strong>机器人实时连杆网格</strong>取最近点，让策略在爬行、深蹲、推箱子时真实学会处理自身肢体遮挡。</li>
+        <li><strong>Phase 1（<code>PreRL</code> 分技能特权专家）：</strong>按物理交互拆成 <code>Robot_Only</code>（平地行走/穿门/钻爬 + <code>LAFAN1</code> 动捕）、<code>Robot_Object</code>（<code>1.0kg</code> 纸箱，加入<strong>手腕距箱子 <code>0.3m</code> 高斯门控的箱子位移与朝向奖励</strong>防空挥手骗分）和 <code>Robot_Terrain</code>（固定 <code>labsofa</code> 落座）三类独立训练。高程图（<code>1.6m × 1.0m</code>）专门以<strong>双脚高度为基准（Foot-relative）</strong>计算，确保下蹲或落座时周围家具高度读数不随骨盆跳变；每局<strong>按各动作片段历史失败率加权采样起始帧</strong>专啃难点，并用严苛 3D 截断（骨盆 <code>&gt;0.5m</code>、手脚 <code>&gt;0.3m</code> 即重开）逼出高精度专家，同时保存 Actor 与 Critic 权重。</li>
+        <li><strong>Phase 2（<code>SuperScene</code> 地板藏箱与精准路由蒸馏）：</strong>代码构建了共享超级场景 <code>SuperScene</code>——按 <code>300 : 57</code>（约 84% 平板 : 16% 沙发）分配地形，并把纸箱平时<strong>藏在地板底下（Hidden below the floor）</strong>，仅当环境抽到 <code>push_v2_*</code> 轨迹时才瞬移激活到地面！通过 <code>teacher_registry.yaml</code> 优先级匹配，每条轨迹严格路由给唯一对应的专家计算动作均值 MSE（<strong>绝不对多专家动作求平均</strong>）。同时因学生无全局定位会产生自然水平漂移，骨盆 3D 淘汰阈值从 <code>0.5m</code> 放宽至 <code>0.8m</code>，改为严卡垂直高度偏差（<code>0.3m</code>）以免误杀正常绕障。</li>
+        <li><strong>Phase 3（<code>MultiCriticPPO</code> 优势分组归一化 + 二级暴力淬炼）：</strong>Actor 全技能共享，但维护 <code>K</code> 个独立特权 Critic（<strong>直接从 Phase 1 对应专家的 Critic 热启动</strong>，避免冷启动乱给梯度训崩学生），在各自技能子 Batch 内独立标准化优势函数后再汇总更新 Actor：</li>
       </ul>
+<pre><code><span class="tok-cmt"># Phase 3 MultiCriticPPO：消除“推箱子回报远高于纯走路”引发的跨技能梯度偏置</span>
+<span class="tok-cmt"># 对第 i 个环境（当前所属技能族 k = k(i)），仅更新对应特权价值网络 V_k，并在技能 k 内部独立做 GAE 归一化：</span>
+A_hat[i, t] = (A[i, t] - mean(A_skill[k])) / (std(A_skill[k]) + <span class="tok-num">1e-8</span>)
+<span class="tok-cmt"># 归一化后所有技能的 Advantage 均对齐至零均值、单位方差，再统一回传梯度更新共享视觉 Actor</span></code></pre>
+      <p>与此同时，Phase 3 才全面解锁第二级硬件退化随机化：将 <code>4×4m</code> 刚性板替换为 <code>16×16m</code> 大板，把 <strong>1/3 平地设为抬高 1cm、踩踏可下陷 2cm 的柔顺地毯材质</strong>（刚度 <code>1.3–6.5 kN/m</code>）；平地以 <code>42%</code> 高概率采样推箱子且箱子随机增重最高 <code>+5 kg</code>（达 6kg）；叠加 PD 增益、转子惯量、关节静摩擦（Stiction）与 <code>15–40ms</code> 随机跳变延迟，最终导出单文件 TensorRT ONNX（输入 <code>obs(434)</code> + <code>history(30×166)</code> + <code>depth(48×84)</code>）直接上真机。</p>
     </div>
 
     <!-- Sub-Q4 -->
