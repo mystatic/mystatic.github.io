@@ -1,66 +1,76 @@
 /* ==========================================================================
-   Reading Notes — Minimalist AI Research Portal (Scheme B · Compact Edition)
-   Hero ("Summer is coming.") + 6-Module Matrix + Latest / Module View
+   Reading Notes — Sunlit Impressionist Sunflower Edition (Scheme B)
+   Painterly Canvas Backdrop + Frosted Glass Modules + Latest Updates
    ========================================================================== */
 
 :root {
-  --bg: #fcfcfd;
-  --bg-elevated: #ffffff;
-  --bg-subtle: #f4f6f9;
-  --bg-hover: #f8fafc;
+  --bg: #fbf8f1;
+  --bg-elevated: rgba(255, 255, 255, 0.78);
+  --bg-elevated-hover: rgba(255, 255, 255, 0.9);
+  --bg-panel: rgba(255, 254, 250, 0.72);
+  --bg-subtle: rgba(248, 250, 252, 0.72);
+  --bg-chip: rgba(241, 245, 249, 0.85);
+  --bg-modal: rgba(255, 255, 255, 0.94);
+
   --text: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-faint: #94a3b8;
-  --border: #e2e8f0;
-  --border-subtle: #edf2f7;
-  --border-strong: #cbd5e1;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --text-faint: #64748b;
+
+  --border: rgba(15, 23, 42, 0.1);
+  --border-subtle: rgba(15, 23, 42, 0.07);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 
   --primary: #0f172a;
-  --brand-accent: #2563eb;
+  --brand-accent: #d97706;
 
-  /* 6 Core Module Accents */
+  /* 7 Core Module Accents */
   /* 01 Agent */
   --m1: #0f766e;
-  --m1-soft: #f0fdfa;
+  --m1-soft: rgba(240, 253, 250, 0.9);
   --m1-border: #99f6e4;
 
   /* 02 System 1 */
   --m2: #2563eb;
-  --m2-soft: #eff6ff;
+  --m2-soft: rgba(239, 246, 255, 0.9);
   --m2-border: #bfdbfe;
 
   /* 03 System 0 */
   --m3: #0891b2;
-  --m3-soft: #ecfeff;
+  --m3-soft: rgba(236, 254, 255, 0.9);
   --m3-border: #a5f3fc;
 
   /* 04 硬件 */
   --m4: #b45309;
-  --m4-soft: #fffbeb;
+  --m4-soft: rgba(255, 251, 235, 0.92);
   --m4-border: #fde68a;
 
   /* 05 强化学习基础 */
   --m5: #4f46e5;
-  --m5-soft: #eef2ff;
+  --m5-soft: rgba(238, 242, 255, 0.9);
   --m5-border: #c7d2fe;
 
   /* 06 机器人基础 */
   --m6: #be123c;
-  --m6-soft: #fff1f2;
+  --m6-soft: rgba(255, 241, 242, 0.9);
   --m6-border: #fecdd3;
 
   /* 07 Product */
   --m7: #7c3aed;
-  --m7-soft: #f5f3ff;
+  --m7-soft: rgba(245, 243, 255, 0.92);
   --m7-border: #ddd6fe;
 
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 4px 14px -4px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 16px 36px -10px rgba(15, 23, 42, 0.09);
-  --shadow-modal: 0 24px 60px -12px rgba(15, 23, 42, 0.22);
+  /* Radiant Sunlit Gold -> Tangerine -> Summer Coral */
+  --hero-gradient: linear-gradient(96deg, #f59e0b 0%, #ff6b00 42%, #f43f5e 82%, #e11d48 100%);
+  --hero-glow: drop-shadow(0 2px 16px rgba(255, 252, 242, 0.92)) drop-shadow(0 1px 2px rgba(15, 23, 42, 0.08));
 
-  --radius-lg: 16px;
+  --shadow-xs: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 8px 24px -6px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 20px 42px -12px rgba(15, 23, 42, 0.14);
+  --shadow-modal: 0 24px 60px -12px rgba(15, 23, 42, 0.28);
+
+  --radius-lg: 18px;
   --radius-md: 12px;
   --radius-sm: 8px;
 
@@ -72,52 +82,61 @@
 
 [data-theme="dark"] {
   --bg: #0b1120;
-  --bg-elevated: #111827;
-  --bg-subtle: #162033;
-  --bg-hover: #131c2e;
-  --text: #f1f5f9;
+  --bg-elevated: rgba(15, 23, 42, 0.74);
+  --bg-elevated-hover: rgba(22, 33, 56, 0.86);
+  --bg-panel: rgba(15, 23, 42, 0.68);
+  --bg-subtle: rgba(30, 41, 59, 0.66);
+  --bg-chip: rgba(30, 41, 59, 0.85);
+  --bg-modal: rgba(17, 24, 39, 0.95);
+
+  --text: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
   --text-faint: #64748b;
-  --border: #1e293b;
-  --border-subtle: #172033;
-  --border-strong: #334155;
+
+  --border: rgba(255, 255, 255, 0.11);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
   --primary: #f8fafc;
-  --brand-accent: #60a5fa;
+  --brand-accent: #fbbf24;
 
   --m1: #2dd4bf;
-  --m1-soft: rgba(45, 212, 191, 0.1);
-  --m1-border: rgba(45, 212, 191, 0.28);
+  --m1-soft: rgba(45, 212, 191, 0.14);
+  --m1-border: rgba(45, 212, 191, 0.32);
 
   --m2: #60a5fa;
-  --m2-soft: rgba(96, 165, 250, 0.1);
-  --m2-border: rgba(96, 165, 250, 0.28);
+  --m2-soft: rgba(96, 165, 250, 0.14);
+  --m2-border: rgba(96, 165, 250, 0.32);
 
   --m3: #22d3ee;
-  --m3-soft: rgba(34, 211, 238, 0.1);
-  --m3-border: rgba(34, 211, 238, 0.28);
+  --m3-soft: rgba(34, 211, 238, 0.14);
+  --m3-border: rgba(34, 211, 238, 0.32);
 
   --m4: #fbbf24;
-  --m4-soft: rgba(251, 191, 36, 0.1);
-  --m4-border: rgba(251, 191, 36, 0.28);
+  --m4-soft: rgba(251, 191, 36, 0.14);
+  --m4-border: rgba(251, 191, 36, 0.32);
 
   --m5: #818cf8;
-  --m5-soft: rgba(129, 140, 248, 0.1);
-  --m5-border: rgba(129, 140, 248, 0.28);
+  --m5-soft: rgba(129, 140, 248, 0.14);
+  --m5-border: rgba(129, 140, 248, 0.32);
 
   --m6: #fb7185;
-  --m6-soft: rgba(251, 113, 133, 0.1);
-  --m6-border: rgba(251, 113, 133, 0.28);
+  --m6-soft: rgba(251, 113, 133, 0.14);
+  --m6-border: rgba(251, 113, 133, 0.32);
 
-  --m7: #a78bfa;
-  --m7-soft: rgba(167, 139, 250, 0.12);
-  --m7-border: rgba(167, 139, 250, 0.28);
+  --m7: #c4b5fd;
+  --m7-soft: rgba(167, 139, 250, 0.16);
+  --m7-border: rgba(167, 139, 250, 0.34);
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 6px 18px -4px rgba(0, 0, 0, 0.45);
-  --shadow-md: 0 18px 40px -10px rgba(0, 0, 0, 0.55);
-  --shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.72);
+  --hero-gradient: linear-gradient(96deg, #fde047 0%, #fbbf24 38%, #fb923c 74%, #fb7185 100%);
+  --hero-glow: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.55));
+
+  --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 10px 28px -6px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 20px 44px -10px rgba(0, 0, 0, 0.6);
+  --shadow-modal: 0 28px 64px -12px rgba(0, 0, 0, 0.76);
 }
 
 /* Base Reset */
@@ -132,17 +151,52 @@ html {
 }
 
 body {
+  position: relative;
   font-family: var(--font-sans);
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.22s ease, color 0.22s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
   overflow-x: hidden;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Fixed Full-Screen Impressionist Sunflower Painting Layer */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: url("sunflowers-bg.jpg") center top / cover no-repeat;
+  transform: scale(1.01);
+  transition: filter 0.35s ease;
+}
+
+/* Directional Painterly Veil: Clear Sunflowers & Sky at Top, Soft Canvas Veil Below */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 62% 42% at 24% 17%, rgba(255, 253, 248, 0.78) 0%, rgba(255, 253, 248, 0.32) 58%, rgba(255, 253, 248, 0) 100%),
+    linear-gradient(180deg, rgba(255, 252, 244, 0.1) 0%, rgba(255, 252, 244, 0.24) 30%, rgba(252, 249, 241, 0.66) 58%, rgba(251, 248, 240, 0.82) 100%);
+  transition: background 0.35s ease;
+}
+
+[data-theme="dark"] body::before {
+  filter: brightness(0.46) saturate(1.12) contrast(1.06);
+}
+
+[data-theme="dark"] body::after {
+  background:
+    radial-gradient(ellipse 65% 45% at 24% 17%, rgba(11, 17, 32, 0.68) 0%, rgba(11, 17, 32, 0.2) 65%, rgba(11, 17, 32, 0) 100%),
+    linear-gradient(180deg, rgba(11, 17, 32, 0.32) 0%, rgba(11, 17, 32, 0.52) 34%, rgba(11, 17, 32, 0.76) 65%, rgba(11, 17, 32, 0.88) 100%);
 }
 
 a {
@@ -166,16 +220,17 @@ input:focus-visible {
 }
 
 /* ==========================================================================
-   Sticky Top Navigation
+   Sticky Frosted Glass Top Navigation
    ========================================================================== */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--glass-highlight);
 }
 
 .topbar-inner {
@@ -201,7 +256,8 @@ input:focus-visible {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--text);
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
   display: inline-block;
   transition: transform 0.2s ease;
 }
@@ -231,7 +287,7 @@ input:focus-visible {
 
 .topbar-link {
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 550;
   color: var(--text-secondary);
   padding: 5px 11px;
   border-radius: 999px;
@@ -242,7 +298,7 @@ input:focus-visible {
 .topbar-link:hover,
 .topbar-link.is-active {
   color: var(--text);
-  background: var(--bg-subtle);
+  background: var(--bg-elevated);
 }
 
 .topbar-sep {
@@ -268,31 +324,31 @@ input:focus-visible {
   background: var(--bg-elevated);
   color: var(--text-secondary);
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 550;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  transition: border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
 }
 
 .action-pill:hover {
   border-color: var(--border-strong);
+  background: var(--bg-elevated-hover);
   color: var(--text);
-  box-shadow: var(--shadow-xs);
 }
 
 .kbd-hint {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-muted);
-  background: var(--bg-subtle);
+  background: var(--bg-chip);
   padding: 1px 6px;
   border-radius: 5px;
   border: 1px solid var(--border);
 }
 
 /* ==========================================================================
-   Main Container & Hero
+   Main Container & Sunlit Hero
    ========================================================================== */
 .page-main {
   flex: 1;
@@ -303,52 +359,64 @@ input:focus-visible {
 }
 
 .hero {
-  padding: 68px 0 52px;
+  padding: 66px 0 48px;
 }
 
 .hero-eyebrow {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 18px;
-  display: flex;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
+  padding: 4px 12px 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
 }
 
 .hero-eyebrow::before {
   content: "";
-  width: 20px;
-  height: 1px;
-  background: var(--border-strong);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
 }
 
 .hero-title {
-  font-size: clamp(40px, 5.6vw, 68px);
-  line-height: 1.08;
+  display: block;
+  width: fit-content;
+  font-size: clamp(46px, 6.2vw, 76px);
+  line-height: 1.14;
+  padding-bottom: 5px;
   letter-spacing: -0.04em;
-  font-weight: 760;
-  color: var(--text);
+  font-weight: 800;
+  background: var(--hero-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: var(--hero-glow);
 }
 
-.hero-lead {
-  margin-top: 18px;
-  max-width: 680px;
-  font-size: 16px;
-  line-height: 1.78;
-  color: var(--text-secondary);
-}
-
-/* 3x2 Six-Module Quick Matrix inside Hero */
+/* Frosted Glass Module Matrix Floating Over the Sunflower Field */
 .pillar-strip {
-  margin-top: 40px;
+  margin-top: 38px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px) saturate(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  overflow: hidden;
 }
 
 .pillar-jump {
@@ -360,31 +428,23 @@ input:focus-visible {
   gap: 7px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  transition: background-color 0.16s ease;
+  transition: background-color 0.18s ease;
   border-radius: 0;
 }
 
-.pillar-jump:nth-child(3n + 1) {
-  padding-left: 12px;
-}
 .pillar-jump:nth-child(3n) {
   border-right: none;
-  padding-right: 12px;
 }
+
 .pillar-jump:last-child:nth-child(3n + 1) {
   grid-column: 1 / -1;
   border-right: none;
   border-bottom: none;
-  padding-left: 12px;
-  padding-right: 12px;
 }
 
-.pillar-jump:hover {
-  background: var(--bg-subtle);
-}
-
+.pillar-jump:hover,
 .pillar-jump.is-active {
-  background: var(--bg-subtle);
+  background: var(--bg-elevated-hover);
 }
 
 .pillar-jump:hover .pillar-jump-name,
@@ -463,9 +523,15 @@ input:focus-visible {
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 28px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: 24px;
+  text-shadow: 0 1px 10px rgba(255, 253, 248, 0.9);
+}
+
+[data-theme="dark"] .section-head,
+[data-theme="dark"] .site-footer {
+  text-shadow: 0 1px 10px rgba(11, 17, 32, 0.9);
 }
 
 .section-head-left {
@@ -477,42 +543,46 @@ input:focus-visible {
 .section-kicker {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .section-title {
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 720;
   letter-spacing: -0.02em;
   color: var(--text);
 }
 
 .section-note {
   font-size: 13px;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .back-latest-btn {
   font-size: 12.5px;
   font-weight: 550;
   color: var(--text-secondary);
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--bg-elevated);
-  transition: border-color 0.15s ease, color 0.15s ease;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
 .back-latest-btn:hover {
   border-color: var(--border-strong);
+  background: var(--bg-elevated-hover);
   color: var(--text);
 }
 
 /* ==========================================================================
-   Latest Updates View (Default View)
+   Latest Updates View (Frosted Glass Cards)
    ========================================================================== */
 .latest-section {
   padding-top: 4px;
@@ -521,12 +591,14 @@ input:focus-visible {
 .latest-grid {
   display: grid;
   grid-template-columns: 7fr 5fr;
-  gap: 28px;
+  gap: 24px;
   align-items: stretch;
 }
 
 .featured-card {
   background: var(--bg-elevated);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 34px 36px;
@@ -534,13 +606,14 @@ input:focus-visible {
   flex-direction: column;
   justify-content: space-between;
   gap: 28px;
-  box-shadow: var(--shadow-xs);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
 }
 
 .featured-card:hover {
+  background: var(--bg-elevated-hover);
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), var(--glass-highlight);
   transform: translateY(-2px);
 }
 
@@ -605,7 +678,8 @@ input:focus-visible {
 .highlight-chip {
   font-size: 12px;
   color: var(--text-secondary);
-  background: var(--bg-subtle);
+  background: var(--bg-chip);
+  border: 1px solid var(--border-subtle);
   padding: 4px 10px;
   border-radius: 6px;
 }
@@ -645,28 +719,37 @@ input:focus-visible {
   transition: transform 0.18s ease;
 }
 
-/* Secondary Recent List */
+/* Secondary Recent List in Matching Frosted Glass Panel */
 .recent-stack {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  overflow: hidden;
 }
 
 .recent-item {
-  padding: 20px 6px;
+  flex: 1;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 7px;
-  transition: background-color 0.16s ease, padding-left 0.16s ease;
-  border-radius: 6px;
+  transition: background-color 0.16s ease;
+}
+
+.recent-item:last-child {
+  border-bottom: none;
 }
 
 .recent-item:hover {
-  background: var(--bg-subtle);
-  padding-left: 12px;
-  padding-right: 12px;
+  background: var(--bg-elevated-hover);
 }
 
 .recent-item-top {
@@ -679,8 +762,8 @@ input:focus-visible {
 }
 
 .recent-item-title {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 15.5px;
+  font-weight: 660;
   line-height: 1.42;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -695,7 +778,7 @@ input:focus-visible {
 }
 
 /* ==========================================================================
-   Active Module Filtered View (Shown In-Place When Clicking Any of the 6 Modules)
+   Active Module Filtered View (Frosted Glass Container)
    ========================================================================== */
 .filtered-view[hidden],
 .latest-view[hidden] {
@@ -703,24 +786,28 @@ input:focus-visible {
 }
 
 .filtered-desc {
-  margin: -12px 0 22px;
+  margin: -8px 0 20px;
   font-size: 14.5px;
   line-height: 1.72;
   color: var(--text-secondary);
-  max-width: 760px;
+  max-width: 780px;
 }
 
 .filtered-list {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  overflow: hidden;
 }
 
 .post-row {
-  padding: 24px 16px;
-  margin: 0 -16px;
+  padding: 24px 28px;
   border-bottom: 1px solid var(--border);
-  border-radius: var(--radius-md);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
@@ -728,8 +815,12 @@ input:focus-visible {
   transition: background-color 0.16s ease;
 }
 
+.post-row:last-child {
+  border-bottom: none;
+}
+
 .post-row:hover {
-  background: var(--bg-subtle);
+  background: var(--bg-elevated-hover);
 }
 
 .post-row-meta {
@@ -747,7 +838,7 @@ input:focus-visible {
   font-weight: 550;
   padding: 1px 8px;
   border-radius: 5px;
-  background: var(--bg-elevated);
+  background: var(--bg-chip);
   border: 1px solid var(--border);
   color: var(--text-secondary);
 }
@@ -787,8 +878,7 @@ input:focus-visible {
 }
 
 .module-empty-row {
-  padding: 28px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 32px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -815,14 +905,15 @@ input:focus-visible {
   width: 100%;
   max-width: var(--container);
   margin: 0 auto;
-  padding: 32px 32px 48px;
+  padding: 28px 32px 44px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   font-size: 13px;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .footer-links {
@@ -844,9 +935,9 @@ input:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 300;
-  background: rgba(15, 23, 42, 0.42);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -860,7 +951,9 @@ input:focus-visible {
 .search-dialog {
   width: 100%;
   max-width: 620px;
-  background: var(--bg-elevated);
+  background: var(--bg-modal);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-modal);
@@ -936,7 +1029,7 @@ input:focus-visible {
 /* ==========================================================================
    Responsive Design (Tablet & Mobile)
    ========================================================================== */
-@media (max-width: 1020px) {
+@media (max-width: 1080px) {
   .topbar-nav {
     display: none;
   }
@@ -948,17 +1041,11 @@ input:focus-visible {
     border-right: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
   }
-  .pillar-jump:nth-child(3n + 1),
   .pillar-jump:nth-child(3n) {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-  .pillar-jump:nth-child(2n + 1) {
-    padding-left: 10px;
+    border-right: 1px solid var(--border);
   }
   .pillar-jump:nth-child(2n) {
     border-right: none;
-    padding-right: 10px;
   }
   .pillar-jump:last-child:nth-child(3n + 1) {
     grid-column: auto;
@@ -967,8 +1054,6 @@ input:focus-visible {
     grid-column: 1 / -1;
     border-right: none;
     border-bottom: none;
-    padding-left: 10px;
-    padding-right: 10px;
   }
   .latest-grid {
     grid-template-columns: 1fr;
@@ -994,21 +1079,22 @@ input:focus-visible {
   }
   .pillar-jump,
   .pillar-jump:nth-child(n) {
-    padding: 16px 4px;
+    padding: 16px 20px;
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
   .pillar-jump:last-child,
   .pillar-jump:last-child:nth-child(n) {
-    padding: 16px 4px;
     border-bottom: none;
   }
   .featured-card {
     padding: 24px 20px;
   }
+  .recent-item {
+    padding: 18px 20px;
+  }
   .post-row {
-    padding: 20px 8px;
-    margin: 0 -8px;
+    padding: 20px;
   }
   .post-row-arrow {
     display: none;

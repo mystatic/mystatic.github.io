@@ -175,9 +175,14 @@
     const themeBtn = document.getElementById('themeToggle');
     if (themeBtn) {
       themeBtn.addEventListener('click', () => {
+        const noAnim = document.createElement('style');
+        noAnim.textContent = '*,*::before,*::after{transition:none!important}';
+        document.head.appendChild(noAnim);
         const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         localStorage.setItem(STORAGE_KEY, next);
         applyTheme(next);
+        void root.offsetHeight;
+        requestAnimationFrame(() => noAnim.remove());
       });
     }
 
