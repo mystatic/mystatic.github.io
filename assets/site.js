@@ -21,7 +21,7 @@
     hardware: {
       kicker: '04 · PHYSICAL',
       title: '硬件',
-      desc: '机器人本体的机械与电驱物理边界：电机扭矩放大、谐波与行星减速器结构、关节透明度及硬件特性对 Sim2Real 的决定作用。',
+      desc: '机器人本体的机械与电驱物理边界：电机扭矩放大、谐波与行星减速器结构、关节透明度、机械臂力控与柔顺控制（阻抗 / 导纳 / 力位混合）及硬件特性对 Sim2Real 的决定作用。',
     },
     rl: {
       kicker: '05 · FOUNDATION',
@@ -41,6 +41,17 @@
   };
 
   const POSTS = [
+    {
+      title: '机械臂力控与柔顺控制深度全解：从刚性走正步、阻抗/导纳双生花到力位混合与拖动示教',
+      moduleKey: 'hardware',
+      moduleLabel: '04 · 硬件',
+      format: '交互教程',
+      date: '2026.11.25',
+      metaNote: '全景拆解 · 2D 机械臂接触实验台 · 3 大硬件追问',
+      summary:
+        '承接单电机控制，系统梳理机械臂正逆运动学与雅可比力映射、阻抗控制 vs 导纳控制因果反转架构、力位混合打磨与零力拖动示教，打通谐波减速器反驱死区与奇异点避坑。',
+      href: 'posts/robot-arm-force-control.html',
+    },
     {
       title: 'Apple HALO：基于仿真的感知型人形机器人全身自主控制与开源拆解',
       moduleKey: 'product',

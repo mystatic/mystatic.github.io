@@ -1,0 +1,2257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="承接单电机控制模式，系统梳理机械臂正逆运动学与雅可比力映射、四大接触控制范式（刚性位置、阻抗控制、导纳控制、力位混合）、三层闭环控制栈与 2D 双连杆机械臂实时接触实验台，深入拆解谐波减速器反驱难题、零力拖动示教与奇异点避坑。">
+<meta name="category" content="硬件">
+<meta property="article:section" content="硬件">
+<meta name="article-format" content="交互教程">
+<title>机械臂力控与柔顺控制深度全解：从刚性走正步、阻抗/导纳双生花到力位混合与拖动示教｜Reading Notes</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface-alt: #f1f0ec;
+    --ink: #18181b;
+    --ink-secondary: #4b5563;
+    --ink-muted: #71717a;
+    --border: #e4e2dc;
+    --accent: #0071e3;       /* Tracker / Loop Blue */
+    --accent-soft: #e8f2ff;
+    --gen: #0d9488;          /* Compliance / Mode Teal */
+    --gen-soft: #ccfbf1;
+    --commit: #d97706;       /* Admittance / Sensor Amber */
+    --commit-soft: #fef3c7;
+    --orch: #4f46e5;         /* Impedance / Deep Q&A Indigo */
+    --orch-soft: #eef2ff;
+    --good: #15803d;
+    --good-soft: #dcfce7;
+    --warn: #b91c1c;
+    --warn-soft: #fee2e2;
+    --code-bg: #14151a;
+    --code-ink: #e5e7eb;
+    --shadow: 0 4px 22px rgba(24, 24, 27, 0.05);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.72;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Sticky Topbar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(247, 247, 245, 0.9);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar-inner {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+  }
+
+  .brand svg {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .home-back-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    transition: all 0.16s ease;
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
+  }
+
+  .home-back-pill:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  footer a:hover {
+    text-decoration: underline;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-secondary);
+    padding: 5px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+  }
+
+  .nav-links a:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .container {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 36px 24px 84px;
+  }
+
+  /* Hero Section */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 38px 38px 32px;
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, var(--orch), var(--gen), var(--accent), #f59e0b);
+  }
+
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .badge.teal {
+    background: var(--gen-soft);
+    color: #0f766e;
+  }
+
+  .badge.amber {
+    background: var(--commit-soft);
+    color: #92400e;
+    border: 1px solid #fde68a;
+  }
+
+  .badge.dark {
+    background: #18181b;
+    color: #f4f4f5;
+  }
+
+  .hero h1 {
+    font-size: 29px;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+
+  .hero-quote {
+    display: inline-block;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f766e;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+    padding: 6px 14px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+
+  .hero-sub {
+    color: var(--ink-secondary);
+    font-size: 15.5px;
+    margin-bottom: 22px;
+  }
+
+  .context-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .stat-box {
+    background: var(--surface-alt);
+    border-radius: 12px;
+    padding: 13px 15px;
+  }
+
+  .stat-box .k {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-weight: 600;
+    display: block;
+  }
+
+  .stat-box .v {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 2px 0 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-box .v.blue { color: var(--accent); }
+  .stat-box .v.teal { color: var(--gen); }
+  .stat-box .v.amber { color: var(--commit); }
+  .stat-box .v.indigo { color: var(--orch); }
+
+  .stat-box .d {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    line-height: 1.42;
+    display: block;
+  }
+
+  /* Section Card */
+  .sec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 36px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+    scroll-margin-top: 76px;
+  }
+
+  .sec-header {
+    background: linear-gradient(135deg, #eff6ff 0%, #fafaf9 100%);
+    border: 1px solid #bfdbfe;
+    border-left: 5px solid var(--accent);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 26px;
+  }
+
+  .sec-header.teal {
+    background: linear-gradient(135deg, #f0fdfa 0%, #fafaf9 100%);
+    border-color: #99f6e4;
+    border-left-color: var(--gen);
+  }
+
+  .sec-header.indigo {
+    background: linear-gradient(135deg, #eef2ff 0%, #fafaf9 100%);
+    border-color: #c7d2fe;
+    border-left-color: var(--orch);
+  }
+
+  .sec-header.amber {
+    background: linear-gradient(135deg, #fffbeb 0%, #fafaf9 100%);
+    border-color: #fde68a;
+    border-left-color: var(--commit);
+  }
+
+  .sec-tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 5px;
+  }
+
+  .sec-header.teal .sec-tag { color: var(--gen); }
+  .sec-header.indigo .sec-tag { color: var(--orch); }
+  .sec-header.amber .sec-tag { color: var(--commit); }
+
+  .sec-title {
+    font-size: 21px;
+    font-weight: 750;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  .tldr-callout {
+    background: #fffbeb;
+    border: 1px solid #fde047;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 26px;
+    font-size: 15px;
+  }
+
+  .tldr-callout strong {
+    color: #78350f;
+  }
+
+  h3 {
+    font-size: 18.5px;
+    font-weight: 700;
+    margin: 30px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+  }
+
+  h3 .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  h3 .step-num.teal { background: var(--gen); }
+  h3 .step-num.indigo { background: var(--orch); }
+  h3 .step-num.amber { background: var(--commit); }
+
+  p {
+    margin-bottom: 14px;
+    color: #27272a;
+  }
+
+  ul, ol {
+    margin: 8px 0 18px 22px;
+  }
+
+  li {
+    margin-bottom: 8px;
+    color: #27272a;
+  }
+
+  li strong {
+    color: var(--ink);
+  }
+
+  code {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: #1f2937;
+  }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 16px 20px;
+    border-radius: 12px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.62;
+    margin: 12px 0 20px;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  .tok-cmt { color: #6b7280; font-style: italic; }
+  .tok-key { color: #93c5fd; }
+  .tok-fn  { color: #fde047; font-weight: 700; }
+  .tok-str { color: #86efac; }
+  .tok-num { color: #fca5a5; }
+
+  /* 4-Mode Grid (.pipe-grid) */
+  .pipe-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 16px 0 24px;
+  }
+
+  .pipe-box {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--gen);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+
+  .pipe-box.top-amber { border-top-color: var(--commit); }
+  .pipe-box.top-teal  { border-top-color: var(--gen); }
+  .pipe-box.top-blue  { border-top-color: var(--accent); }
+  .pipe-box.top-indigo { border-top-color: var(--orch); }
+
+  .pipe-box small {
+    display: block;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--gen);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+
+  .pipe-box.top-amber small { color: var(--commit); }
+  .pipe-box.top-blue small  { color: var(--accent); }
+  .pipe-box.top-indigo small { color: var(--orch); }
+
+  .pipe-box b {
+    display: block;
+    font-size: 16.5px;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+
+  .pipe-motto {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gen);
+    padding: 7px 11px;
+    border-radius: 6px;
+    font-size: 13.2px;
+    font-weight: 650;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .pipe-box.top-amber .pipe-motto { border-left-color: var(--commit); }
+  .pipe-box.top-blue .pipe-motto  { border-left-color: var(--accent); }
+  .pipe-box.top-indigo .pipe-motto { border-left-color: var(--orch); }
+
+  .pipe-box p {
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin-bottom: 8px;
+  }
+  .pipe-box p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 3-State Grid (.insight-grid-3) */
+  .insight-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .insight-card {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+
+  .insight-card .num-chip {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--orch-soft);
+    color: var(--orch);
+    margin-bottom: 8px;
+  }
+
+  .insight-card .num-chip.teal { background: var(--gen-soft); color: #0f766e; }
+  .insight-card .num-chip.amber { background: var(--commit-soft); color: #92400e; }
+  .insight-card .num-chip.blue { background: var(--accent-soft); color: var(--accent); }
+
+  .insight-card h4 {
+    font-size: 15.5px;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+
+  .insight-card p {
+    font-size: 13.8px;
+    color: var(--ink-secondary);
+    margin-bottom: 0;
+  }
+
+  /* Architecture 3-Layer Stack */
+  .arch-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 18px 0 22px;
+  }
+
+  .arch-layer {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    background: #fafaf9;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .arch-layer.l-orch { border-left: 5px solid var(--orch); }
+  .arch-layer.l-gen  { border-left: 5px solid var(--gen); }
+  .arch-layer.l-trk  { border-left: 5px solid var(--accent); }
+
+  .arch-title {
+    font-weight: 750;
+    font-size: 15px;
+    color: var(--ink);
+  }
+
+  .arch-freq {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: 5px;
+  }
+
+  .l-orch .arch-freq { background: var(--orch-soft); color: var(--orch); }
+  .l-gen  .arch-freq { background: var(--gen-soft); color: #0f766e; }
+  .l-trk  .arch-freq { background: var(--accent-soft); color: var(--accent); }
+
+  .arch-hw {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+  }
+
+  .arch-desc {
+    font-size: 14.5px;
+    color: var(--ink-secondary);
+  }
+
+  .arch-arrow {
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .quote-box {
+    background: var(--surface-alt);
+    border-left: 4px solid var(--commit);
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin: 14px 0 22px;
+  }
+
+  /* Interactive Bench Lab (.bench-box) */
+  .bench-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 22px 24px;
+    margin: 16px 0 8px;
+  }
+
+  .bench-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .bench-title {
+    font-weight: 750;
+    font-size: 15.5px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mode-pill-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .mode-pill {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-secondary);
+    padding: 6px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .mode-pill:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .mode-pill.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 113, 227, 0.22);
+  }
+
+  .preset-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  .preset-btn {
+    border: 1px dashed #cbd5e1;
+    background: #ffffff;
+    color: var(--ink-secondary);
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.14s ease;
+  }
+
+  .preset-btn:hover {
+    border-style: solid;
+    border-color: var(--gen);
+    color: #0f766e;
+    background: #f0fdfa;
+  }
+
+  .sim-grid {
+    display: grid;
+    grid-template-columns: 1.12fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .sim-stage {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+
+  canvas#armCanvas {
+    display: block;
+    width: 100%;
+    height: 265px;
+    border-radius: 10px;
+    background: #fcfcfd;
+    border: 1px solid #f1f5f9;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  canvas#armCanvas:active {
+    cursor: grabbing;
+  }
+
+  .sim-legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin: 6px 0 10px;
+  }
+
+  .sim-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .dot-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  canvas#forceWaveCanvas {
+    display: block;
+    width: 100%;
+    height: 90px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 6px;
+  }
+
+  .sim-status-banner {
+    margin-top: 8px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-size: 12.5px;
+    color: var(--ink-secondary);
+    line-height: 1.5;
+  }
+
+  .sim-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .readout-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .readout-cell {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 9px 10px;
+    text-align: center;
+  }
+
+  .readout-cell .rk {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    font-weight: 600;
+  }
+
+  .readout-cell .rv {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+
+  .trq-meter-box {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 13px;
+  }
+
+  .trq-meter-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--ink-secondary);
+    margin-bottom: 6px;
+  }
+
+  .meter-track {
+    position: relative;
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .meter-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--gen);
+    border-radius: 999px;
+    transition: width 0.05s linear, background 0.15s ease;
+  }
+
+  .ctrl-card {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 13px;
+  }
+
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 650;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .ctrl-label span.val {
+    font-family: ui-monospace, "SF Mono", monospace;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 650;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .btn-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .action-btn {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: var(--ink);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+
+  .action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .action-btn.teal {
+    background: #f0fdfa;
+    border-color: #99f6e4;
+    color: #0f766e;
+  }
+
+  .action-btn.teal:hover {
+    background: #ccfbf1;
+  }
+
+  .push-action-btn {
+    width: 100%;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: var(--warn);
+    padding: 11px 16px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 750;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s ease;
+  }
+
+  .push-action-btn:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+  }
+
+  .push-action-btn:active, .push-action-btn.is-pushing {
+    background: var(--warn);
+    color: #ffffff;
+    border-color: var(--warn);
+    transform: scale(0.99);
+  }
+
+  /* Sub-Q&A Divider Blocks */
+  .sub-qa {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 26px;
+    margin-top: 24px;
+    background: #fcfcfb;
+  }
+
+  .sub-qa-q {
+    font-size: 17.5px;
+    font-weight: 750;
+    color: var(--ink);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px dashed var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .sub-qa-q .q-badge {
+    background: var(--ink);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 2px 9px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Two-column contrast cards */
+  .contrast-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 16px 0 18px;
+  }
+
+  .contrast-card {
+    border-radius: 14px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+  }
+
+  .contrast-card.good {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+  }
+
+  .contrast-card.bad {
+    background: #fef2f2;
+    border-color: #fecaca;
+  }
+
+  .contrast-card.info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }
+
+  .contrast-card.amber {
+    background: #fffbeb;
+    border-color: #fde68a;
+  }
+
+  .contrast-card h4 {
+    font-size: 15px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .contrast-card.good h4 { color: var(--good); }
+  .contrast-card.bad h4  { color: var(--warn); }
+  .contrast-card.info h4 { color: var(--accent); }
+  .contrast-card.amber h4 { color: #92400e; }
+
+  .contrast-card p, .contrast-card ul {
+    font-size: 13.8px;
+    margin-bottom: 0;
+    color: var(--ink-secondary);
+  }
+
+  /* Tables & Filter Bar */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 12px 0 12px;
+  }
+
+  .filter-pill {
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--ink-secondary);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-pill.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: #ffffff;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 10px 0 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: var(--surface);
+  }
+
+  th, td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--surface-alt);
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr.highlight-row td {
+    background: #eff6ff;
+  }
+
+  .pill-ok, .pill-warn, .pill-part {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .pill-ok   { background: var(--good-soft); color: var(--good); }
+  .pill-warn { background: var(--commit-soft); color: #92400e; }
+  .pill-part { background: #e0e7ff; color: #3730a3; }
+
+  footer {
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-muted);
+    padding-top: 12px;
+  }
+
+  @media (max-width: 820px) {
+    .topbar-inner {
+      padding: 10px 16px;
+      gap: 8px;
+    }
+    .nav-links {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      width: 100%;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .nav-links::-webkit-scrollbar {
+      display: none;
+    }
+    .context-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .pipe-grid,
+    .contrast-grid,
+    .insight-grid-3,
+    .sim-grid {
+      grid-template-columns: 1fr;
+    }
+    .arch-layer {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .hero, .sec-card {
+      padding: 24px 20px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-left">
+      <a class="home-back-pill" href="../index.html">← 返回博客首页</a>
+      <a class="brand" href="#top">
+        <svg viewBox="0 0 36 36" fill="none" aria-hidden="true">
+          <rect width="36" height="36" rx="9" fill="#18181B"/>
+          <circle cx="11" cy="25" r="3.2" fill="#F5F5F7"/>
+          <path d="M11 25L18.5 13L27 17.5" stroke="#2997FF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="18.5" cy="13" r="2.5" fill="#4FD1C5"/>
+          <circle cx="27" cy="17.5" r="2.8" fill="#F59E0B"/>
+        </svg>
+        <span>机械臂力控与柔顺控制深度全解</span>
+      </a>
+    </div>
+    <nav class="nav-links">
+      <a href="#sec-paradigms">01 · 四大交互范式与运动学</a>
+      <a href="#sec-loop-lab">02 · 阻抗/导纳架构与体验台</a>
+      <a href="#sec-qa">03 · 三大核心追问</a>
+      <a href="#sec-table">04 · 硬件门派与速查表</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container" id="top">
+
+  <!-- ==================== HERO ==================== -->
+  <section class="hero">
+    <div class="badge-row">
+      <span class="badge dark">Robotic Manipulation Notes · 2026</span>
+      <span class="badge">空间映射：FK / IK / 雅可比 Jᵀ</span>
+      <span class="badge teal">主动柔顺：阻抗 vs 导纳双生花</span>
+      <span class="badge amber">接触作业：力位混合与拖动示教</span>
+    </div>
+    <h1>机械臂力控与柔顺控制全景拆解：从刚性走正步到太极推手</h1>
+    <div class="hero-quote">“纯位置控制让机械臂学会在空气里精准走正步；而力控与柔顺控制，才真正赋予机械臂触碰物理世界的‘手感’与分寸。”</div>
+    <p class="hero-sub">
+      承接上一篇单电机控制（<code>CSP</code> 位置、<code>CSV</code> 速度、<code>CST</code> 力矩与 <code>MIT</code> 阻抗），本文把 <strong>6～7 个电机串联成整条机械臂</strong>：系统厘清力控、柔顺、阻抗、导纳、力位混合、重力补偿与拖动示教的<strong>树状包含关系</strong>，剖析<strong>阻抗与导纳的因果反转控制栈</strong>并内置 <strong>2D 双连杆机械臂实时接触实验台</strong>，深入解答减速器反驱死区、零力拖动代码与奇异点暴走三大工程痛点。
+    </p>
+    <div class="context-grid">
+      <div class="stat-box">
+        <span class="k">刚性工业臂 · 重复定位精度</span>
+        <div class="v blue">±0.02 mm</div>
+        <span class="d">隔空焊接搬运王者；但工件偏 1 mm 硬碰即撞损或过流急停</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">阻抗控制 · 力矩直通回路</span>
+        <div class="v indigo">Δx → CST / MIT</div>
+        <span class="d">测位置偏差算出力矩，无需腕部传感器，天生抗高速冲击</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">导纳控制 · 刚性臂柔顺外挂</span>
+        <div class="v amber">F_ext → Δx → CSP</div>
+        <span class="d">腕部六维力传感器测力后改写目标点，位置电机演出软身段</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">力位混合 · 正交空间解耦</span>
+        <div class="v teal">法向力 ⊥ 切向位</div>
+        <span class="d">垂直曲面死守恒定打磨按压力，平行曲面精准走完擦拭轨迹</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 01: 4 PARADIGMS & KINEMATICS ==================== -->
+  <section class="sec-card" id="sec-paradigms">
+    <div class="sec-header teal">
+      <span class="sec-tag">Part 01 · 核心四大接触交互范式与空间翻译地基</span>
+      <div class="sec-title">为什么力控、柔顺、阻抗、导纳听起来一团乱麻？它们到底是谁包含谁？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>辈分总纲（破除概念混乱）：</strong>这些名词根本不是并列关系，而是<strong>包含关系</strong>——不碰外物时用<strong>纯刚性位置控制</strong>；一旦要触碰环境，只要管理接触力或遇阻退让，统称<strong>广义力控家族</strong>。广义力控往下分三大支：① <strong>柔顺控制</strong>（像弹簧一样让步，含被动真弹簧，以及靠算法的<strong>阻抗控制</strong>与<strong>导纳控制</strong>双胞胎）；② <strong>力位混合控制</strong>（一面控死压力、一面走准路线）；③ <strong>重力补偿与零力拖动示教</strong>（太空失重悬停学艺）。
+    </div>
+
+    <h3><span class="step-num teal">1</span>机械臂四大核心控制范式逐一拆解</h3>
+    <div class="pipe-grid">
+      <div class="pipe-box top-blue">
+        <small>Paradigm 01 · Rigid Position (CSP)</small>
+        <b>纯刚性位置控制 —— “闭眼走正步的硬汉”</b>
+        <div class="pipe-motto">口诀：命令我去 50.0 cm，黑板挡在 49.8 cm 我也照样往死里怼！</div>
+        <p><strong>生动比喻：</strong>6 个关节全部跑高增益 <code>CSP</code> 周期同步位置模式。在空气里挥舞（激光切割、喷涂、隔空码垛）快准狠；但只要拿它去擦黑板或插充电枪，环境偏歪 <strong>2 毫米</strong> 就会把电流拉满硬撞，轻则过流保护停机，重则顶穿工件。</p>
+        <p><strong>适用边界：</strong>工件定位极其精准、无需与未知环境发生刚性挤压的非接触作业。</p>
+      </div>
+
+      <div class="pipe-box top-indigo">
+        <small>Paradigm 02 · Impedance Control (主动柔顺 · 哥哥)</small>
+        <b>阻抗控制 —— “测位置偏差，算回弹力气”</b>
+        <div class="pipe-motto">口诀：把我推偏 2 厘米，我就按弹簧公式温柔回敬 10 牛顿力！</div>
+        <p><strong>生动比喻：</strong>就是上篇 <strong>MIT 模式的全臂空间升级版</strong>。底层电机直接跑 <code>CST / MIT</code> 力矩控制，<strong>不需要装昂贵的腕部力传感器</strong>——外力推偏末端时，编码器测出位置差 <code>Δx</code>，控制器算出虚拟弹簧力并直接转化为电机电流。</p>
+        <p><strong>典型场景：</strong>人形机器人全身交互、四足机器狗落地缓冲、准直驱（QDD）双臂柔顺抓取。</p>
+      </div>
+
+      <div class="pipe-box top-amber">
+        <small>Paradigm 03 · Admittance Control (主动柔顺 · 弟弟)</small>
+        <b>导纳控制 —— “测外力大小，改目标位置”</b>
+        <div class="pipe-motto">口诀：我骨子里是位置硬汉，但手腕贴了痛觉神经，一碰我就光速缩手！</div>
+        <p><strong>生动比喻：</strong>传统工业臂减速比高达 100:1，齿轮极涩根本推不动，电机也只认死板的 <code>CSP</code> 位置指令。于是在<strong>手腕加装一颗六维力传感器</strong>：手指推手腕 5 牛顿 → 传感器报信 → 大脑立刻把发给位置电机的目标点往后挪 2 厘米，<strong>靠主动退让“演”出了弹簧感</strong>。</p>
+        <p><strong>典型场景：</strong>传统工业六轴臂改装精密轴孔装配（插齿轮/装轴承）、重型工件柔顺对接。</p>
+      </div>
+
+      <div class="pipe-box top-teal">
+        <small>Paradigm 04 · Hybrid Force / Position</small>
+        <b>力位混合控制 —— “擦黑板与削苹果大师”</b>
+        <div class="pipe-motto">口诀：垂直桌面方向死保 15 牛顿按压力，平行桌面方向精准走出 S 形！</div>
+        <p><strong>生动比喻：</strong>纯弹簧柔顺有个缺点——桌面凸起的地方按得重、凹陷的地方按得轻。<strong>力位混合控制</strong>把三维空间正交切开：<strong>法向（垂直表面）</strong>交给纯力控闭环死守恒定压力；<strong>切向（沿表面）</strong>交给位置闭环精准走轨迹。</p>
+        <p><strong>典型场景：</strong>3C 手机外壳曲面抛光、焊缝恒力打磨、医疗超声探头贴合人体自动扫查。</p>
+      </div>
+    </div>
+
+    <h3><span class="step-num teal">2</span>从“单电机角度”到“手掌三维坐标”的 3 位数学翻译官</h3>
+    <div class="insight-grid-3">
+      <div class="insight-card">
+        <span class="num-chip blue">Translator A · FK</span>
+        <h4>正运动学（Forward Kinematics）</h4>
+        <p><strong>“知关节角 → 算手掌在哪”：</strong>读取 6 个电机编码器角度 <code>q₁~q₆</code>，顺着连杆长度用三角几何一路算出末端三维坐标 <code>(x, y, z)</code>，唯一确定。</p>
+      </div>
+      <div class="insight-card">
+        <span class="num-chip teal">Translator B · IK</span>
+        <h4>逆运动学（Inverse Kinematics）</h4>
+        <p><strong>“知目标点 → 反推各电机角度”：</strong>已知水杯在 <code>(x, y, z)</code>，每 1ms 反解出 6 个电机各自该去几度并喂给 <code>CSP</code> 驱动器，存在多解或够不着无解。</p>
+      </div>
+      <div class="insight-card">
+        <span class="num-chip amber">Translator C · Jacobian Jᵀ</span>
+        <h4>雅可比转置（空间力与关节力矩桥梁）</h4>
+        <p><strong>力控灵魂公式 <code>τ = Jᵀ(q) · F</code>：</strong>直接把“想让手掌在笛卡尔空间输出的三维力 <code>F</code>”，精准换算成“6 个电机各自该出的扭矩 <code>τ</code>”！</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 02: STACK + INTERACTIVE LAB ==================== -->
+  <section class="sec-card" id="sec-loop-lab">
+    <div class="sec-header">
+      <span class="sec-tag">Part 02 · 底层闭环栈揭秘与 2D 机械臂实时交互体验</span>
+      <div class="sec-title">阻抗与导纳在控制回路里到底怎么接线？亲手推一推、擦一擦曲面会发生什么？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>因果反转本质：</strong>物理定义上，<strong>阻抗（Impedance）= 位移输入 → 力输出</strong>；<strong>导纳（Admittance）= 力输入 → 位移输出</strong>，两者互为数学倒数。落在机械臂代码里，就是看你最底层的关节伺服到底开在 <code>CST 力矩模式</code> 还是 <code>CSP 位置模式</code>。
+    </div>
+
+    <h3><span class="step-num">1</span>多轴机械臂三层交互控制栈（Cartesian-to-Joint Stack）</h3>
+    <p>把机械臂大脑与上篇的单电机三环连接起来，完整的信号流分为以下三层：</p>
+
+    <div class="arch-stack">
+      <div class="arch-layer l-orch">
+        <div>
+          <div class="arch-title">A · 顶层：笛卡尔交互律层</div>
+          <span class="arch-freq">500–1000 Hz（上位机实时核）</span>
+          <span class="arch-hw">阻抗律 / 导纳律 / 力位正交分解</span>
+        </div>
+        <div class="arch-desc">
+          在人类直观的三维空间制定接触规则：<strong>阻抗路线</strong>根据末端位置误差 <code>x_des - x</code> 算出期望虚拟弹簧力 <code>F_cmd</code>；<strong>导纳路线</strong>读取腕部六维力传感器外力 <code>F_ext</code>，积分算出退让后的修正目标点 <code>x_cmd</code>。
+        </div>
+      </div>
+      <div class="arch-arrow">↓ 阻抗路线下发空间力 <code>F_cmd</code> ｜ 导纳与纯位置路线下发修正坐标 <code>x_cmd</code></div>
+      <div class="arch-layer l-gen">
+        <div>
+          <div class="arch-title">B · 中层：运动学与动力学映射层</div>
+          <span class="arch-freq">1 kHz（Pinocchio / RBDL 动力学库）</span>
+          <span class="arch-hw">雅可比转置 Jᵀ / 逆运动学 IK / 重力项 G(q)</span>
+        </div>
+        <div class="arch-desc">
+          完成“手掌空间”向“6 个独立关节”的翻译：<strong>阻抗与零力拖动路线</strong>通过 <code>τ_cmd = Jᵀ(q)·F_cmd + G(q)</code> 合成各轴力矩并加上重力自重补偿；<strong>导纳与位置路线</strong>通过逆运动学 <code>IK(x_cmd)</code> 反解出各轴目标角 <code>q_cmd</code>。
+        </div>
+      </div>
+      <div class="arch-arrow">↓ 通过 EtherCAT / CAN-FD 总线每 1ms 同步喂给 6 个关节驱动器</div>
+      <div class="arch-layer l-trk">
+        <div>
+          <div class="arch-title">C · 底层：单关节伺服驱动内环</div>
+          <span class="arch-freq">20–40 kHz FOC 电流环</span>
+          <span class="arch-hw">无缝衔接上篇：CST / MIT vs CSP</span>
+        </div>
+        <div class="arch-desc">
+          <strong>阻抗 / 重力补偿</strong>直通上篇讲过的 <code>CST 周期同步力矩</code> 或 <code>MIT 模式</code>（高反向驱动性，柔顺抗冲击）；<strong>导纳 / 刚性轨迹</strong>送入高增益 <code>CSP 周期同步位置模式</code>（强力克服谐波减速器摩擦，精准走到退让点）。
+        </div>
+      </div>
+    </div>
+
+    <div class="quote-box">
+      <strong>实验台观察指南 —— 重点看“橙色退让点”与“红色接触力”：</strong>在下方实验台中，点击预设 <strong>“纯位置偏 2cm 撞台过载”</strong> 与 <strong>“同位置改阻抗柔顺贴合”</strong> 可直观对比刚性与柔顺的天壤之别；切到 <strong>“导纳控制”</strong> 时，你能亲眼看到手腕琥珀色传感器环测到反力后，如何把<strong>橙色指令点 <code>x_cmd</code></strong> 推离绿色原目标以保护机械臂。
+    </div>
+
+    <h3><span class="step-num">2</span>交互实验台：2D 双连杆机械臂接触与柔顺实验室</h3>
+    <p>可在画布中<strong>直接用鼠标拖拽绿色目标十字或蓝色手爪末端</strong>，切换 5 种控制模式或点击一键预设，观察实时接触力矢量与下方波形：</p>
+
+    <div class="bench-box">
+      <div class="bench-head">
+        <div class="bench-title">
+          <span>双连杆平面机械臂实时动力学实验台</span>
+          <span class="pill-part">FK / Jᵀ 力映射 · 480 Hz 物理子步</span>
+        </div>
+        <span style="font-size:12px;color:var(--ink-muted);">支持直接在画布拖拽绿色十字目标或蓝色手爪末端</span>
+      </div>
+
+      <div class="mode-pill-bar" id="armModeTabs">
+        <button class="mode-pill active" data-mode="imp">阻抗控制（CST 弹性肌肉）</button>
+        <button class="mode-pill" data-mode="pos">纯刚性位置（CSP 死守轨迹）</button>
+        <button class="mode-pill" data-mode="adm">导纳控制（六维力主动退让）</button>
+        <button class="mode-pill" data-mode="hybrid">力位混合（波浪曲面恒力打磨）</button>
+        <button class="mode-pill" data-mode="zerog">重力补偿与拖动示教</button>
+      </div>
+
+      <div class="preset-bar">
+        <span>一键典型工况预设：</span>
+        <button class="preset-btn" data-preset="pos-crash">纯位置偏 2cm 撞台过载</button>
+        <button class="preset-btn" data-preset="imp-gentle">同位置改阻抗柔顺贴合</button>
+        <button class="preset-btn" data-preset="adm-yield">导纳测力改目标点 (看橙点)</button>
+        <button class="preset-btn" data-preset="hybrid-polish">波浪曲面 15N 恒力擦拭</button>
+        <button class="preset-btn" data-preset="zerog-drop">关闭重力补偿断电下坠</button>
+      </div>
+
+      <div class="sim-grid">
+        <div class="sim-stage">
+          <canvas id="armCanvas" width="450" height="265"></canvas>
+          <div class="sim-legend">
+            <span><i class="dot-swatch" style="background:#0d9488"></i>期望目标 x_des</span>
+            <span><i class="dot-swatch" style="background:#d97706"></i>导纳修正点 x_cmd</span>
+            <span><i class="dot-swatch" style="background:#0071e3"></i>双连杆机械臂</span>
+            <span><i class="dot-swatch" style="background:#b91c1c"></i>接触反力 / 外推力</span>
+          </div>
+          <canvas id="forceWaveCanvas" width="450" height="90"></canvas>
+          <div class="sim-status-banner" id="armStatusBanner">
+            <strong>阻抗控制模式：</strong>无需腕部传感器，试着把绿色目标十字拖到波浪曲面下方——机械臂贴合台面后温柔停住（约 12~18 N），绝不硬怼过载。
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <div class="readout-grid">
+            <div class="readout-cell">
+              <div class="rk">末端接触合力</div>
+              <div class="rv" id="rdForce">0.0 N</div>
+            </div>
+            <div class="readout-cell">
+              <div class="rk">空间位置偏差</div>
+              <div class="rv" id="rdErr">0.0 mm</div>
+            </div>
+            <div class="readout-cell">
+              <div class="rk">关节峰值力矩</div>
+              <div class="rv" id="rdTorque">0.0 N·m</div>
+            </div>
+          </div>
+
+          <div class="trq-meter-box">
+            <div class="trq-meter-head">
+              <span>接触力安全负荷条（超过 42 N 触发碰撞过载报警）</span>
+              <span id="rdForceState">自由空间</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill" id="forceBarFill"></div>
+            </div>
+          </div>
+
+          <div class="ctrl-card">
+            <label class="toggle-row">
+              <span>放置波浪曲面工件台（模拟黑板 / 打磨曲面）</span>
+              <input type="checkbox" id="chkSurface" checked style="width:15px;height:15px;accent-color:var(--gen);cursor:pointer;" />
+            </label>
+          </div>
+
+          <div class="ctrl-card" id="cardStiff">
+            <div class="ctrl-label">
+              <span id="lblKp">笛卡尔虚拟刚度 Kp</span>
+              <span class="val" id="valKp">180 N/m（柔顺适中）</span>
+            </div>
+            <input type="range" id="rngArmKp" min="40" max="600" value="180" />
+
+            <div class="ctrl-label" style="margin-top:8px;">
+              <span>笛卡尔虚拟阻尼 Kd</span>
+              <span class="val" id="valKd">26 N·s/m</span>
+            </div>
+            <input type="range" id="rngArmKd" min="4" max="65" value="26" />
+          </div>
+
+          <div class="ctrl-card" id="cardHybrid" style="display:none;">
+            <div class="ctrl-label">
+              <span>法向恒定打磨目标压力 F_des</span>
+              <span class="val" id="valFdes">15 N</span>
+            </div>
+            <input type="range" id="rngFdes" min="5" max="32" value="15" />
+          </div>
+
+          <div class="ctrl-card" id="cardZeroG" style="display:none;">
+            <label class="toggle-row">
+              <span>开启重力补偿项 G(q)（取消勾选观察自重下坠）</span>
+              <input type="checkbox" id="chkGravComp" checked style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;" />
+            </label>
+            <div class="btn-row-2">
+              <button class="action-btn teal" id="btnReplayTeach" type="button">回放刚才拖动的轨迹</button>
+              <button class="action-btn" id="btnClearTeach" type="button">清空示教轨迹</button>
+            </div>
+          </div>
+
+          <button class="push-action-btn" id="btnArmPush" type="button">
+            按住不放：向左上猛推机械臂手腕（施加 24 N 外力冲击）
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 03: 3 DEEP Q&A ==================== -->
+  <section class="sec-card" id="sec-qa">
+    <div class="sec-header indigo">
+      <span class="sec-tag">Part 03 · 进阶灵魂三连问深度拆解</span>
+      <div class="sec-title">为什么传统工业臂做不了纯阻抗？零力拖动示教怎么写代码？“奇异点抽风”又是什么？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>从算法框图到真机落地的三道鸿沟：</strong>真机调试时，90% 的困惑都源自物理硬件与几何边界——① <strong>减速比平方效应</strong>锁死了传统工业臂的反向驱动能力；② <strong>重力与摩擦辨识精度</strong>决定了零力拖动的手感上限；③ <strong>雅可比降秩分母归零</strong>是机械臂在奇异点突然暴走甩尾的真凶。
+    </div>
+
+    <!-- Sub-Q1 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 1</span>
+        <span>阻抗控制连力传感器都不用买，为什么传统工业机械臂不干脆全用阻抗控制？</span>
+      </div>
+
+      <p>核心卡点在于<strong>减速器（Gearbox）的反向驱动性（Backdrivability）</strong>！电机转子反射到关节输出端的等效惯量与<strong>减速比 N 的平方</strong>成正比，外加谐波柔轮极高的启动静摩擦死区：</p>
+
+<pre><code><span class="tok-cmt"># 电机转子反射到连杆端的等效惯量公式（N 为减速器减速比）：</span>
+I_reflected = <span class="tok-fn">N * N</span> * I_rotor
+
+<span class="tok-cmt"># 路线 A：具身智能 QDD 准直驱行星关节（N = 6 ~ 10）</span>
+N = <span class="tok-num">8</span>   -&gt; 惯量仅放大 <span class="tok-num">64</span> 倍，静摩擦 &lt; 0.3 N·m，外力推手腕顺畅传回转子，电流环直接精准控力！
+
+<span class="tok-cmt"># 路线 B：传统工业机械臂 谐波 / RV 减速器（N = 100 ~ 160）</span>
+N = <span class="tok-num">120</span> -&gt; 惯量暴增 <span class="tok-num">14,400</span> 倍！静摩擦占额定力矩 20%~30%，外力全卡死在齿轮里，电机电流毫无感知！</code></pre>
+
+      <div class="contrast-grid">
+        <div class="contrast-card info">
+          <h4>想做真阻抗控制：两条硬件出路</h4>
+          <ul>
+            <li><strong>具身主流（低减速比行星 QDD）：</strong>大扭矩外转子电机配 <code>6:1 ~ 10:1</code> 行星齿轮，天生丝滑可反驱，直接跑 <code>MIT / CST</code> 阻抗，抗冲击且成本可控。</li>
+            <li><strong>旗舰协作臂（每轴加关节扭矩传感器 JTS）：</strong>如 Franka Research 3、库卡 iiwa，保留 <code>100:1</code> 谐波减速器，但在<strong>每个关节输出端塞入扭矩传感器</strong>做内环摩擦力抵消，手感极佳但造价高昂。</li>
+          </ul>
+        </div>
+
+        <div class="contrast-card amber">
+          <h4>存量传统工业臂：腕部六维力 + 导纳破局</h4>
+          <ul>
+            <li><strong>高性价比工程方案：</strong>既然 6 个谐波/RV 关节内部摩擦糊死了，干脆保留驱动器原有的高刚性 <code>CSP</code> 位置模式不动。</li>
+            <li>只需在<strong>最末端手腕法兰盘</strong>加装 1 颗六维力传感器（测三维力 <code>Fx,Fy,Fz</code> 与三维力矩 <code>Mx,My,Mz</code>），用外层导纳算法实时修正目标位置，即可低成本实现精密插拔与恒力打磨。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-Q2 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 2</span>
+        <span>展厅里一根小拇指就能牵着走的“零力拖动示教”，底层代码到底是怎么写的？</span>
+      </div>
+
+      <p>让几十斤重的金属手臂像羽毛一样悬浮在半空任人牵引，工程上对应<strong>“纯动力学电流前馈派”</strong>与<strong>“腕部传感器零力导纳派”</strong>两种标准写法：</p>
+
+<pre><code><span class="tok-cmt"># 写法 1：QDD / 协作机械臂 —— 纯动力学重力矩 + 摩擦力前馈补偿（CST 模式，Kp=0, Kd=0）</span>
+tau_gravity  = pinocchio.computeGeneralizedGravity(model, q_actual)         <span class="tok-cmt"># 实时计算各轴重力矩 G(q)</span>
+tau_friction = K_coulomb * tanh(dq_actual / v_eps) + K_viscous * dq_actual  <span class="tok-cmt"># 抵消静摩擦与粘滞阻尼</span>
+tau_cmd      = tau_gravity + tau_friction                                   <span class="tok-cmt"># 全身任意连杆均可一指推走</span>
+
+<span class="tok-cmt"># 写法 2：带腕部六维力传感器的工业臂 —— 目标力为 0 的纯阻尼导纳控制（CSP 模式）</span>
+F_human      = read_wrist_ft() - rotate_tool_gravity_to_sensor(q_actual)    <span class="tok-cmt"># 剥离末端夹爪自重分量</span>
+v_cartesian  = F_human / B_virtual_damping                                  <span class="tok-cmt"># 人往哪拉，指令点就往哪走</span>
+q_des_next   = q_actual + damped_pinv(Jacobian(q_actual)) @ v_cartesian * dt</code></pre>
+
+      <div class="contrast-grid">
+        <div class="contrast-card good">
+          <h4>✓ 写法 1（动力学前馈）：全臂柔顺</h4>
+          <ul>
+            <li>无论你推手腕、推小臂还是推手肘，整条机械臂都能顺滑让开；但对连杆质量、质心坐标与温度漂移下的摩擦模型精度要求极高（参数偏 5% 就会出现松手慢速下坠或自发漂移）。</li>
+          </ul>
+        </div>
+
+        <div class="contrast-card bad">
+          <h4>⚠ 写法 2（腕部零力导纳）：仅工具端可拉</h4>
+          <ul>
+            <li>哪怕是负载 200 kg 的重型工业机械臂，握住末端工具也能用一根手指轻松牵引；但<strong>传感器后方的手臂本体完全没有测力能力</strong>，如果去推大臂或手肘依然像铁墙一样纹丝不动。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-Q3 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 3</span>
+        <span>调试机械臂时总被警告“避开奇异点（Singularity）”，奇异点到底是什么？为什么会暴走？</span>
+      </div>
+
+      <p>不用死记线性代数里的“雅可比矩阵降秩 <code>det(J) = 0</code>”，用你自己的手臂做个动作 3 秒钟就能建立物理直觉：</p>
+
+      <div class="contrast-grid">
+        <div class="contrast-card bad">
+          <h4>⚠ 物理现象：自由度丢失与分母归零速度爆炸</h4>
+          <ul>
+            <li><strong>边界伸直奇异：</strong>把胳膊 180° 彻底绷直，外力顺着手臂往回推你时全靠骨头硬顶（电机不用出力），但你想让手掌再往前伸 1 毫米也做不到——<strong>丢失了沿手臂方向的运动能力</strong>。</li>
+            <li><strong>腕部共线奇异（最危险）：</strong>当六轴机械臂第 4 轴与第 6 轴旋转中心重合（类似万向节死锁），手掌明明只想匀速缓慢平移走直线，逆运动学求逆 <code>dq = J⁻¹·v</code> 时因除以趋近于 <code>0</code> 的数，会瞬间命令第 4、6 关节以<strong>每秒数千度的极限转速疯狂甩尾翻转 180°</strong>！</li>
+          </ul>
+        </div>
+
+        <div class="contrast-card good">
+          <h4>✓ 工程破局：MoveJ 绕行与阻尼最小二乘（DLS）</h4>
+          <ul>
+            <li><strong>区分 MoveJ 与 MoveL：</strong>在关节空间直接插值角度（<code>MoveJ</code>）根本不求雅可比逆矩阵，<strong>绝对不会触发奇异点暴走</strong>；只有强制要求笛卡尔走直线（<code>MoveL</code>）或跑导纳控制时才会踩坑。</li>
+            <li><strong>阻尼最小二乘伪逆（Damped Least Squares）：</strong>将 <code>J⁻¹</code> 替换为 <code>Jᵀ(JJᵀ + λ²I)⁻¹</code>——接近奇异区时自动注入微小阻尼项 <code>λ²</code> 托底分母，宁可让直线轻微弯曲 1 毫米，也绝不允许关节速度无穷大爆炸。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 04: HARDWARE CAMPS & MASTER TABLE ==================== -->
+  <section class="sec-card" id="sec-table">
+    <div class="sec-header amber">
+      <span class="sec-tag">Part 04 · 三大机械臂硬件门派与全概念选型速查</span>
+      <div class="sec-title">面对传统工业臂、协作臂与准直驱具身机械臂，算法栈该如何对号入座？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>选型铁律：</strong><strong>先看减速器与测力传感器配置，再定控制算法！</strong>高减速比无力传感只能跑纯位置 <code>CSP</code>；高减速比配腕部六维力首选<strong>导纳 / 力位混合</strong>；低减速比行星 QDD 或每轴内置扭矩传感器 JTS 首选<strong>阻抗控制（MIT / CST）</strong>。
+    </div>
+
+    <h3><span class="step-num amber">1</span>市面上三大主流机械臂硬件门派对照</h3>
+    <div class="insight-grid-3" style="margin-bottom:24px;">
+      <div class="insight-card">
+        <span class="num-chip blue">Camp A · 传统工业刚性臂</span>
+        <h4>发那科 / ABB / 安川 / 库卡工业系</h4>
+        <p><strong>硬件底子：</strong>大减速比 RV + 谐波减速器，极致刚性，重复定位 <code>±0.02 mm</code>。<br><strong>控制栈：</strong>默认 <code>CSP</code> 纯位置；打磨装配场景外加腕部六维力传感器跑<strong>导纳或力位混合</strong>。</p>
+      </div>
+      <div class="insight-card">
+        <span class="num-chip teal">Camp B · 工业协作机械臂</span>
+        <h4>优傲 UR / 节卡 / 法奥 / Franka</h4>
+        <p><strong>硬件底子：</strong>谐波减速器 + 电流估算（普及型）或<strong>每轴输出端扭矩传感器 JTS</strong>（旗舰科研型）。<br><strong>控制栈：</strong>原生支持碰撞检测急停、零力拖动示教与高精度笛卡尔阻抗控制。</p>
+      </div>
+      <div class="insight-card">
+        <span class="num-chip amber">Camp C · 具身准直驱机械臂</span>
+        <h4>ALOHA / 宇树 / 智元 / 开源 QDD 臂</h4>
+        <p><strong>硬件底子：</strong>大扭矩盘式电机 + <code>6:1~10:1</code> 行星齿轮（一体化 <code>MIT</code> 关节），高反驱低成本。<br><strong>控制栈：</strong>天生适配 <code>MIT / CST</code> 阻抗控制、主从同构遥操作与强化学习（RL / VLA）。</p>
+      </div>
+    </div>
+
+    <h3><span class="step-num amber">2</span>机械臂运动与力控全景速查表</h3>
+    <div class="filter-bar" id="armTableFilter">
+      <button class="filter-pill active" data-cat="all">全部概念 (11)</button>
+      <button class="filter-pill" data-cat="force">柔顺与力控算法 (5)</button>
+      <button class="filter-pill" data-cat="kin">运动学与动力学 (4)</button>
+      <button class="filter-pill" data-cat="app">交互功能与传感硬件 (2)</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="armMasterTable">
+        <thead>
+          <tr>
+            <th style="width:17%">专业术语 / 英文</th>
+            <th style="width:15%">分类标签</th>
+            <th style="width:21%">底层电机与传感器依赖</th>
+            <th>生动直觉比喻 &amp; 典型工程场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-cat="kin">
+            <td><strong>正 / 逆运动学</strong><br><code>FK / IK</code></td>
+            <td><span class="pill-part">几何翻译官</span></td>
+            <td>关节编码器 ↔ 空间坐标</td>
+            <td><strong>FK：</strong>知关节角算手掌在哪；<strong>IK：</strong>知水杯三维坐标反推 6 个电机角度并每 1ms 喂给 <code>CSP</code>。</td>
+          </tr>
+          <tr data-cat="kin">
+            <td><strong>雅可比转置</strong><br><code>Jacobian Jᵀ(q)</code></td>
+            <td><span class="pill-part">力映射核心</span></td>
+            <td>连杆实时几何姿态</td>
+            <td>靠公式 <code>τ = Jᵀ · F</code> 把“手掌想出的空间推力”直接换算成“每个关节电机的目标力矩”。</td>
+          </tr>
+          <tr data-cat="kin">
+            <td><strong>奇异点</strong><br><code>Singularity</code></td>
+            <td><span class="pill-warn">几何死锁禁区</span></td>
+            <td>雅可比降秩 <code>det(J)=0</code></td>
+            <td><strong>手臂完全绷直或轴线重合：</strong>丢失某方向运动能力，强行走直线会导致关节目标转速无穷大暴走。</td>
+          </tr>
+          <tr data-cat="force">
+            <td><strong>被动柔顺</strong><br><code>Passive Compliance</code></td>
+            <td><span class="pill-warn">物理缓冲派</span></td>
+            <td>机械弹簧 / 橡胶 / RCC 柔顺腕</td>
+            <td><strong>真装物理弹簧：</strong>零延迟、便宜耐造，适合流水线倒角轴孔盲插；但刚度写死无法代码在线修改。</td>
+          </tr>
+          <tr class="highlight-row" data-cat="force">
+            <td><strong>阻抗控制</strong><br><code>Impedance Control</code></td>
+            <td><span class="pill-ok">主动柔顺 · 哥哥</span></td>
+            <td><code>CST / MIT</code> 力矩关节（或 JTS）</td>
+            <td><strong>测位置差 → 算出力矩：</strong>真弹性肌肉，不怕高速猛撞；人形机器人、四足、QDD 机械臂绝对主力。</td>
+          </tr>
+          <tr class="highlight-row" data-cat="force">
+            <td><strong>导纳控制</strong><br><code>Admittance Control</code></td>
+            <td><span class="pill-ok">主动柔顺 · 弟弟</span></td>
+            <td><code>CSP</code> 位置电机 + <strong>腕部六维力</strong></td>
+            <td><strong>测外力 → 修改目标位置：</strong>硬汉贴痛觉神经主动退让，让高减速比传统工业臂胜任精密柔顺装配。</td>
+          </tr>
+          <tr class="highlight-row" data-cat="force">
+            <td><strong>力位混合控制</strong><br><code>Hybrid Force/Pos</code></td>
+            <td><span class="pill-ok">接触作业王牌</span></td>
+            <td>正交选择矩阵 + 力闭环</td>
+            <td><strong>擦黑板绝活：</strong>垂直曲面死守恒定 15N 按压力，平行曲面精准走轨迹；手机壳抛光、焊缝打磨必备。</td>
+          </tr>
+          <tr data-cat="force">
+            <td><strong>直接力控制</strong><br><code>Direct Force</code></td>
+            <td><span class="pill-warn">纯力闭环</span></td>
+            <td>力传感器 + 力矩/位置内环</td>
+            <td>不关心停在哪，只管末端压紧力严格跟踪设定牛顿数；用于恒力压装机、材料疲劳测试台。</td>
+          </tr>
+          <tr data-cat="kin">
+            <td><strong>重力补偿</strong><br><code>Gravity Comp G(q)</code></td>
+            <td><span class="pill-part">动力学基本功</span></td>
+            <td>连杆质量质心参数 + <code>CST</code></td>
+            <td><strong>太空失重悬停：</strong>电机实时输出刚好抵消自身重量的反向力矩，松手即稳稳停在半空不砸桌。</td>
+          </tr>
+          <tr data-cat="app">
+            <td><strong>零力拖动示教</strong><br><code>Lead-through</code></td>
+            <td><span class="pill-ok">零代码编程</span></td>
+            <td>重力+摩擦补偿 或 零力导纳</td>
+            <td><strong>手把手教徒弟：</strong>老师傅握着机械臂走一遍焊接或涂胶路线，自动记录毫秒级点位并无限精准重播。</td>
+          </tr>
+          <tr data-cat="app">
+            <td><strong>六维力 vs 关节扭矩</strong><br><code>6-Axis F/T vs JTS</code></td>
+            <td><span class="pill-part">测力硬件选型</span></td>
+            <td>应变片 / 光学电容测力计</td>
+            <td><strong>腕部六维力：</strong>手腕装 1 颗测末端六维力/矩；<strong>关节扭矩 JTS：</strong>每轴装 1 颗（共 6~7 颗），全臂防撞。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <a href="../index.html">← 返回博客首页</a> · 归档于 04 · 硬件模块 · 整理日期：2026.11.25
+  </footer>
+
+</main>
+
+<script>
+(function () {
+  const armCanvas = document.getElementById('armCanvas');
+  const armCtx = armCanvas.getContext('2d');
+  const waveCanvas = document.getElementById('forceWaveCanvas');
+  const waveCtx = waveCanvas.getContext('2d');
+
+  const BASE_X = 94, BASE_Y = 204, L1 = 106, L2 = 94;
+  const MAX_REACH = L1 + L2 - 6;
+  const MIN_REACH = Math.abs(L1 - L2) + 14;
+
+  function surfaceY(x) {
+    return 184 - 0.11 * (x - 260) + 11 * Math.sin((x - 165) * 0.042);
+  }
+  function surfaceNormal(x) {
+    const dydx = -0.11 + 11 * 0.042 * Math.cos((x - 165) * 0.042);
+    const len = Math.hypot(dydx, 1);
+    return { nx: dydx / len, ny: -1 / len, tx: 1 / len, ty: dydx / len };
+  }
+
+  function fk(q1, q2) {
+    const x1 = BASE_X + L1 * Math.cos(q1);
+    const y1 = BASE_Y - L1 * Math.sin(q1);
+    const q12 = q1 + q2;
+    const x2 = x1 + L2 * Math.cos(q12);
+    const y2 = y1 - L2 * Math.sin(q12);
+    return { x1, y1, x2, y2 };
+  }
+
+  function jacobianCanvas(q1, q2) {
+    const s1 = Math.sin(q1), c1 = Math.cos(q1);
+    const s12 = Math.sin(q1 + q2), c12 = Math.cos(q1 + q2);
+    return {
+      j11: -L1 * s1 - L2 * s12,
+      j12: -L2 * s12,
+      j21: -L1 * c1 - L2 * c12,
+      j22: -L2 * c12
+    };
+  }
+
+  function ikElbowUp(tx, ty) {
+    let dx = tx - BASE_X;
+    let dy = BASE_Y - ty;
+    let r = Math.hypot(dx, dy);
+    if (r > MAX_REACH) { dx *= MAX_REACH / r; dy *= MAX_REACH / r; r = MAX_REACH; }
+    else if (r < MIN_REACH) { dx *= MIN_REACH / (r || 1); dy *= MIN_REACH / (r || 1); r = MIN_REACH; }
+    let cosQ2 = (r * r - L1 * L1 - L2 * L2) / (2 * L1 * L2);
+    cosQ2 = Math.max(-0.995, Math.min(0.995, cosQ2));
+    const q2 = -Math.acos(cosQ2);
+    const alpha = Math.atan2(dy, dx);
+    const beta = Math.atan2(L2 * Math.sin(-q2), L1 + L2 * Math.cos(q2));
+    const q1 = alpha + beta;
+    return { q1, q2, clampedX: BASE_X + dx, clampedY: BASE_Y - dy };
+  }
+
+  function gravityTorques(q1, q2) {
+    return {
+      g1: 11.5 * Math.cos(q1) + 5.8 * Math.cos(q1 + q2),
+      g2: 5.8 * Math.cos(q1 + q2)
+    };
+  }
+
+  let mode = 'imp';
+  let q1 = 1.05, q2 = -1.32, dq1 = 0, dq2 = 0;
+  let targetX = 255, targetY = 146;
+  let admX = targetX, admY = targetY, admVx = 0, admVy = 0;
+  let polishPhase = 0, fIntegral = 0;
+  let recordedPath = [], isReplaying = false, replayIdx = 0;
+  let btnPushing = false, dragType = null, mouseX = 0, mouseY = 0;
+
+  const chkSurface = document.getElementById('chkSurface');
+  const rngArmKp = document.getElementById('rngArmKp');
+  const rngArmKd = document.getElementById('rngArmKd');
+  const rngFdes = document.getElementById('rngFdes');
+  const chkGravComp = document.getElementById('chkGravComp');
+  const valKp = document.getElementById('valKp');
+  const valKd = document.getElementById('valKd');
+  const valFdes = document.getElementById('valFdes');
+  const rdForce = document.getElementById('rdForce');
+  const rdErr = document.getElementById('rdErr');
+  const rdTorque = document.getElementById('rdTorque');
+  const rdForceState = document.getElementById('rdForceState');
+  const forceBarFill = document.getElementById('forceBarFill');
+  const armStatusBanner = document.getElementById('armStatusBanner');
+  const cardStiff = document.getElementById('cardStiff');
+  const cardHybrid = document.getElementById('cardHybrid');
+  const cardZeroG = document.getElementById('cardZeroG');
+  const lblKp = document.getElementById('lblKp');
+
+  const WAVE_LEN = 220;
+  const forceHist = new Array(WAVE_LEN).fill(0);
+  const targetForceHist = new Array(WAVE_LEN).fill(0);
+  let lastContactForce = { fx: 0, fy: 0, mag: 0 };
+  let lastJointTorquePeak = 0;
+
+  const modeDescriptions = {
+    imp: '<strong>阻抗控制（CST / MIT 弹性肌肉）：</strong>无需腕部传感器，把绿色十字拖到波浪曲面下方——机械臂贴合表面后温柔停住（约 12~18 N），靠 <code>τ = Jᵀ[Kp·Δx - Kd·v] + G(q)</code> 顺势缓冲。',
+    pos: '<strong>纯刚性位置（CSP 死守轨迹）：</strong>隔空定位极准，但把绿色目标点拖进波浪曲面下方哪怕一点点——电机会把力矩拉满死命往下怼，接触力瞬间突破 42 N 触发红色过载报警！',
+    adm: '<strong>导纳控制（腕部六维力 + CSP 主动退让）：</strong>观察手腕琥珀色传感器环与画布上的<strong>橙色退让点 x_cmd</strong>！测到接触反力后，导纳外环主动把指令点往外挪，指挥刚性位置电机柔顺让步。',
+    hybrid: '<strong>力位混合控制（曲面恒力擦拭）：</strong>切向沿波浪表面自动往返巡航，法向闭环死守设定下压力（默认 <code>15 N</code>）。观察下方波形：无论台面高低起伏，实际接触力始终贴合绿色虚线！',
+    zerog: '<strong>重力补偿与拖动示教：</strong>电机实时输出 <code>G(q)</code> 抵消自身重量！<strong>直接用鼠标在画布按住蓝色手爪拖动一段路线</strong>即可录制轨迹，松手点击“回放刚才拖动的轨迹”即可复现动作。'
+  };
+
+  function syncModeUI() {
+    document.querySelectorAll('#armModeTabs .mode-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    armStatusBanner.innerHTML = modeDescriptions[mode];
+
+    cardStiff.style.display = (mode === 'imp' || mode === 'adm') ? 'block' : 'none';
+    cardHybrid.style.display = (mode === 'hybrid') ? 'block' : 'none';
+    cardZeroG.style.display = (mode === 'zerog') ? 'block' : 'none';
+    lblKp.textContent = mode === 'adm' ? '导纳虚拟刚度 Kp（越小退让越多）' : '笛卡尔虚拟刚度 Kp（软硬度）';
+
+    if (mode === 'hybrid') { chkSurface.checked = true; fIntegral = 0; }
+    if (mode !== 'zerog') { isReplaying = false; }
+    admX = targetX; admY = targetY; admVx = 0; admVy = 0;
+    updateSliderLabels();
+  }
+
+  function updateSliderLabels() {
+    const kp = Number(rngArmKp.value);
+    const tag = kp < 110 ? '低刚度极软' : (kp < 260 ? '柔顺适中' : '高刚度偏硬');
+    valKp.textContent = `${kp} N/m（${tag}）`;
+    valKd.textContent = `${rngArmKd.value} N·s/m`;
+    valFdes.textContent = `${rngFdes.value} N`;
+  }
+
+  document.querySelectorAll('#armModeTabs .mode-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      mode = btn.dataset.mode;
+      if (mode === 'zerog') chkGravComp.checked = true;
+      syncModeUI();
+    });
+  });
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      if (p === 'pos-crash') {
+        mode = 'pos'; chkSurface.checked = true; targetX = 272; targetY = surfaceY(272) + 22;
+      } else if (p === 'imp-gentle') {
+        mode = 'imp'; chkSurface.checked = true; rngArmKp.value = 150; rngArmKd.value = 26; targetX = 272; targetY = surfaceY(272) + 22;
+      } else if (p === 'adm-yield') {
+        mode = 'adm'; chkSurface.checked = true; rngArmKp.value = 140; rngArmKd.value = 28; targetX = 272; targetY = surfaceY(272) + 24;
+      } else if (p === 'hybrid-polish') {
+        mode = 'hybrid'; chkSurface.checked = true; rngFdes.value = 15;
+      } else if (p === 'zerog-drop') {
+        mode = 'zerog'; chkSurface.checked = true; isReplaying = false;
+        const lifted = ikElbowUp(255, 108);
+        q1 = lifted.q1; q2 = lifted.q2; dq1 = 0; dq2 = 0;
+        chkGravComp.checked = false;
+      }
+      syncModeUI();
+    });
+  });
+
+  [rngArmKp, rngArmKd, rngFdes].forEach(el => el.addEventListener('input', updateSliderLabels));
+
+  const btnArmPush = document.getElementById('btnArmPush');
+  const startPush = (e) => { e.preventDefault(); btnPushing = true; btnArmPush.classList.add('is-pushing'); };
+  const endPush = () => { btnPushing = false; btnArmPush.classList.remove('is-pushing'); };
+  btnArmPush.addEventListener('mousedown', startPush);
+  btnArmPush.addEventListener('touchstart', startPush, { passive: false });
+  window.addEventListener('mouseup', endPush);
+  window.addEventListener('touchend', endPush);
+
+  document.getElementById('btnReplayTeach').addEventListener('click', () => {
+    if (recordedPath.length > 5) {
+      isReplaying = true; replayIdx = 0; chkGravComp.checked = true;
+    } else {
+      armStatusBanner.innerHTML = '<strong>提示：</strong>请先用鼠标在画布上按住<strong>蓝色手爪末端</strong>拖动一段路线完成示教录制，再点击回放。';
+    }
+  });
+  document.getElementById('btnClearTeach').addEventListener('click', () => {
+    recordedPath = []; isReplaying = false;
+  });
+
+  function getCanvasPos(evt) {
+    const rect = armCanvas.getBoundingClientRect();
+    return {
+      x: (evt.clientX - rect.left) * (armCanvas.width / rect.width),
+      y: (evt.clientY - rect.top) * (armCanvas.height / rect.height)
+    };
+  }
+
+  armCanvas.addEventListener('pointerdown', (e) => {
+    const p = getCanvasPos(e);
+    mouseX = p.x; mouseY = p.y;
+    const tcp = fk(q1, q2);
+    if (mode === 'zerog' || Math.hypot(p.x - tcp.x2, p.y - tcp.y2) < 22) {
+      dragType = 'tcp';
+      if (mode === 'zerog') { isReplaying = false; recordedPath = [{ x: tcp.x2, y: tcp.y2 }]; }
+    } else if (mode !== 'hybrid') {
+      dragType = 'target';
+      const cl = ikElbowUp(p.x, p.y);
+      targetX = cl.clampedX; targetY = cl.clampedY;
+    }
+    armCanvas.setPointerCapture(e.pointerId);
+  });
+
+  armCanvas.addEventListener('pointermove', (e) => {
+    if (!dragType) return;
+    const p = getCanvasPos(e);
+    mouseX = p.x; mouseY = p.y;
+    if (dragType === 'target' && mode !== 'hybrid') {
+      const cl = ikElbowUp(p.x, p.y);
+      targetX = cl.clampedX; targetY = cl.clampedY;
+    }
+  });
+  armCanvas.addEventListener('pointerup', () => { dragType = null; });
+  armCanvas.addEventListener('pointercancel', () => { dragType = null; });
+
+  function stepPhysics(dt) {
+    const SUBSTEPS = 8;
+    const h = dt / SUBSTEPS;
+    const kpSlider = Number(rngArmKp.value);
+    const kdSlider = Number(rngArmKd.value);
+    const fDes = Number(rngFdes.value);
+    const hasSurface = chkSurface.checked;
+
+    for (let s = 0; s < SUBSTEPS; s++) {
+      const pos = fk(q1, q2);
+      const J = jacobianCanvas(q1, q2);
+      const vx = J.j11 * dq1 + J.j12 * dq2;
+      const vy = J.j21 * dq1 + J.j22 * dq2;
+
+      let envFx = 0, envFy = 0;
+      if (hasSurface && pos.x2 >= 140 && pos.x2 <= 430) {
+        const sy = surfaceY(pos.x2);
+        const pen = pos.y2 - sy;
+        if (pen > 0) {
+          const nrm = surfaceNormal(pos.x2);
+          const vn = vx * nrm.nx + vy * nrm.ny;
+          let fn = Math.max(0, Math.min(85, 3.2 * pen - 0.32 * Math.min(0, vn)));
+          const vt = vx * nrm.tx + vy * nrm.ty;
+          const ft = -0.04 * vt;
+          envFx = fn * nrm.nx + ft * nrm.tx;
+          envFy = fn * nrm.ny + ft * nrm.ty;
+        }
+      }
+
+      let humanFx = 0, humanFy = 0;
+      if (btnPushing) { humanFx -= 19; humanFy -= 15; }
+      if (dragType === 'tcp') {
+        const pullKp = mode === 'zerog' ? 1.6 : 2.2;
+        humanFx += Math.max(-42, Math.min(42, pullKp * (mouseX - pos.x2) - 0.22 * vx));
+        humanFy += Math.max(-42, Math.min(42, pullKp * (mouseY - pos.y2) - 0.22 * vy));
+      }
+
+      const totalExtFx = envFx + humanFx;
+      const totalExtFy = envFy + humanFy;
+      const grav = gravityTorques(q1, q2);
+      let tauCmd1 = 0, tauCmd2 = 0;
+
+      if (mode === 'pos') {
+        const desQ = ikElbowUp(targetX, targetY);
+        tauCmd1 = 420 * (desQ.q1 - q1) - 34 * dq1 + grav.g1;
+        tauCmd2 = 420 * (desQ.q2 - q2) - 34 * dq2 + grav.g2;
+        admX = targetX; admY = targetY;
+      } else if (mode === 'imp') {
+        const kpPx = kpSlider * 0.0042;
+        const kdPx = kdSlider * 0.0085;
+        const fxCmd = kpPx * (targetX - pos.x2) - kdPx * vx;
+        const fyCmd = kpPx * (targetY - pos.y2) - kdPx * vy;
+        tauCmd1 = (J.j11 * fxCmd + J.j21 * fyCmd) * 0.024 + grav.g1;
+        tauCmd2 = (J.j12 * fxCmd + J.j22 * fyCmd) * 0.024 + grav.g2;
+        admX = targetX; admY = targetY;
+      } else if (mode === 'adm') {
+        const mVirt = 0.09;
+        const kpAdm = kpSlider * 0.0042;
+        const kdAdm = kdSlider * 0.012;
+        admVx += ((totalExtFx - kdAdm * admVx - kpAdm * (admX - targetX)) / mVirt) * h;
+        admVy += ((totalExtFy - kdAdm * admVy - kpAdm * (admY - targetY)) / mVirt) * h;
+        admX += admVx * h; admY += admVy * h;
+        const clAdm = ikElbowUp(admX, admY);
+        admX = clAdm.clampedX; admY = clAdm.clampedY;
+        tauCmd1 = 390 * (clAdm.q1 - q1) - 32 * dq1 + grav.g1;
+        tauCmd2 = 390 * (clAdm.q2 - q2) - 32 * dq2 + grav.g2;
+      } else if (mode === 'hybrid') {
+        polishPhase += 1.45 * h;
+        const xSweep = 272 + 80 * Math.sin(polishPhase);
+        const ySurf = surfaceY(xSweep);
+        const nrm = surfaceNormal(xSweep);
+        targetX = xSweep; targetY = ySurf;
+
+        const errTang = (xSweep - pos.x2) * nrm.tx + (ySurf - pos.y2) * nrm.ty;
+        const vTang = vx * nrm.tx + vy * nrm.ty;
+        const fTangCmd = 2.2 * errTang - 0.28 * vTang;
+
+        const fNormMeas = Math.max(0, envFx * nrm.nx + envFy * nrm.ny);
+        const fErr = fDes - fNormMeas;
+        fIntegral = Math.max(-18, Math.min(25, fIntegral + fErr * h * 8.0));
+        const vNorm = vx * nrm.nx + vy * nrm.ny;
+        let pushInto = fDes + 0.85 * fErr + fIntegral + 0.18 * vNorm;
+        if (pos.y2 < ySurf - 1) pushInto = Math.min(pushInto, 12);
+        const fNormCmd = -pushInto;
+
+        const fxCmd = fTangCmd * nrm.tx + fNormCmd * nrm.nx;
+        const fyCmd = fTangCmd * nrm.ty + fNormCmd * nrm.ny;
+        tauCmd1 = (J.j11 * fxCmd + J.j21 * fyCmd) * 0.024 + grav.g1;
+        tauCmd2 = (J.j12 * fxCmd + J.j22 * fyCmd) * 0.024 + grav.g2;
+      } else if (mode === 'zerog') {
+        if (isReplaying && recordedPath.length > 1) {
+          replayIdx += 60 * h;
+          if (replayIdx >= recordedPath.length) replayIdx = 0;
+          const pt = recordedPath[Math.floor(replayIdx)];
+          targetX = pt.x; targetY = pt.y;
+          const rq = ikElbowUp(pt.x, pt.y);
+          tauCmd1 = 180 * (rq.q1 - q1) - 22 * dq1 + grav.g1;
+          tauCmd2 = 180 * (rq.q2 - q2) - 22 * dq2 + grav.g2;
+        } else {
+          const gScale = chkGravComp.checked ? 1.0 : 0.0;
+          tauCmd1 = gScale * grav.g1 - 2.4 * dq1;
+          tauCmd2 = gScale * grav.g2 - 2.0 * dq2;
+          targetX = pos.x2; targetY = pos.y2;
+        }
+      }
+
+      tauCmd1 = Math.max(-52, Math.min(52, tauCmd1));
+      tauCmd2 = Math.max(-52, Math.min(52, tauCmd2));
+
+      const tauExt1 = (J.j11 * totalExtFx + J.j21 * totalExtFy) * 0.024;
+      const tauExt2 = (J.j12 * totalExtFx + J.j22 * totalExtFy) * 0.024;
+
+      dq1 = Math.max(-9, Math.min(9, dq1 + ((tauCmd1 + tauExt1 - grav.g1 - 0.6 * dq1) / 1.35) * h));
+      dq2 = Math.max(-9, Math.min(9, dq2 + ((tauCmd2 + tauExt2 - grav.g2 - 0.45 * dq2) / 0.85) * h));
+      q1 += dq1 * h; q2 += dq2 * h;
+
+      if (q1 < -0.35) { q1 = -0.35; dq1 = Math.max(0, dq1); }
+      if (q1 > 2.45)  { q1 = 2.45;  dq1 = Math.min(0, dq1); }
+      if (q2 > -0.18) { q2 = -0.18; dq2 = Math.min(0, dq2); }
+      if (q2 < -2.65) { q2 = -2.65; dq2 = Math.max(0, dq2); }
+
+      lastContactForce = { fx: totalExtFx, fy: totalExtFy, mag: Math.hypot(totalExtFx, totalExtFy) };
+      lastJointTorquePeak = Math.max(Math.abs(tauCmd1), Math.abs(tauCmd2));
+    }
+
+    if (mode === 'zerog' && dragType === 'tcp') {
+      const tcpNow = fk(q1, q2);
+      const lastPt = recordedPath[recordedPath.length - 1];
+      if (!lastPt || Math.hypot(tcpNow.x2 - lastPt.x, tcpNow.y2 - lastPt.y) > 2.5) {
+        if (recordedPath.length < 600) recordedPath.push({ x: tcpNow.x2, y: tcpNow.y2 });
+      }
+    }
+
+    forceHist.push(lastContactForce.mag);
+    if (forceHist.length > WAVE_LEN) forceHist.shift();
+    targetForceHist.push(mode === 'hybrid' ? fDes : 0);
+    if (targetForceHist.length > WAVE_LEN) targetForceHist.shift();
+
+    const tcpFinal = fk(q1, q2);
+    rdForce.textContent = `${lastContactForce.mag.toFixed(1)} N`;
+    rdErr.textContent = `${Math.hypot(targetX - tcpFinal.x2, targetY - tcpFinal.y2).toFixed(1)} mm`;
+    rdTorque.textContent = `${lastJointTorquePeak.toFixed(1)} N·m`;
+
+    forceBarFill.style.width = `${Math.min(100, (lastContactForce.mag / 55) * 100)}%`;
+    if (lastContactForce.mag > 42) {
+      forceBarFill.style.background = '#b91c1c';
+      rdForceState.textContent = '⚠ 刚性碰撞过载！';
+      rdForceState.style.color = '#b91c1c';
+    } else if (lastContactForce.mag > 3) {
+      forceBarFill.style.background = '#0d9488';
+      rdForceState.textContent = '柔顺安全接触';
+      rdForceState.style.color = '#0f766e';
+    } else {
+      forceBarFill.style.background = '#0071e3';
+      rdForceState.textContent = '自由空间';
+      rdForceState.style.color = '#4b5563';
+    }
+  }
+
+  function drawScene() {
+    const W = armCanvas.width, H = armCanvas.height;
+    armCtx.clearRect(0, 0, W, H);
+
+    armCtx.strokeStyle = '#f1f5f9';
+    armCtx.lineWidth = 1;
+    for (let gx = 40; gx < W; gx += 40) { armCtx.beginPath(); armCtx.moveTo(gx, 0); armCtx.lineTo(gx, H); armCtx.stroke(); }
+    for (let gy = 40; gy < H; gy += 40) { armCtx.beginPath(); armCtx.moveTo(0, gy); armCtx.lineTo(W, gy); armCtx.stroke(); }
+
+    if (chkSurface.checked) {
+      armCtx.beginPath();
+      armCtx.moveTo(140, H);
+      for (let x = 140; x <= 430; x += 4) armCtx.lineTo(x, surfaceY(x));
+      armCtx.lineTo(430, H);
+      armCtx.closePath();
+      armCtx.fillStyle = 'rgba(226, 232, 240, 0.65)';
+      armCtx.fill();
+
+      armCtx.beginPath();
+      for (let x = 140; x <= 430; x += 3) {
+        const sy = surfaceY(x);
+        if (x === 140) armCtx.moveTo(x, sy); else armCtx.lineTo(x, sy);
+      }
+      armCtx.strokeStyle = '#64748b';
+      armCtx.lineWidth = 2.6;
+      armCtx.stroke();
+
+      armCtx.fillStyle = '#71717a';
+      armCtx.font = '600 11px -apple-system, sans-serif';
+      armCtx.fillText('波浪曲面工件台', 332, H - 10);
+    }
+
+    if (mode === 'zerog' && recordedPath.length > 1) {
+      armCtx.beginPath();
+      recordedPath.forEach((pt, idx) => { if (idx === 0) armCtx.moveTo(pt.x, pt.y); else armCtx.lineTo(pt.x, pt.y); });
+      armCtx.strokeStyle = '#0d9488';
+      armCtx.lineWidth = 2.2;
+      armCtx.setLineDash([5, 4]);
+      armCtx.stroke();
+      armCtx.setLineDash([]);
+    }
+
+    const pos = fk(q1, q2);
+
+    if (mode === 'imp') {
+      const dist = Math.hypot(targetX - pos.x2, targetY - pos.y2);
+      if (dist > 4) {
+        armCtx.beginPath();
+        const steps = 10, dx = (targetX - pos.x2) / steps, dy = (targetY - pos.y2) / steps;
+        const nx = -dy / (dist / steps || 1) * 4.5, ny = dx / (dist / steps || 1) * 4.5;
+        armCtx.moveTo(pos.x2, pos.y2);
+        for (let i = 1; i < steps; i++) {
+          const s = (i % 2 === 0) ? 1 : -1;
+          armCtx.lineTo(pos.x2 + dx * i + nx * s, pos.y2 + dy * i + ny * s);
+        }
+        armCtx.lineTo(targetX, targetY);
+        armCtx.strokeStyle = '#4f46e5';
+        armCtx.lineWidth = 1.6;
+        armCtx.stroke();
+      }
+    }
+
+    if (mode !== 'zerog' || isReplaying) {
+      armCtx.strokeStyle = '#0d9488';
+      armCtx.lineWidth = 2;
+      armCtx.beginPath(); armCtx.arc(targetX, targetY, 7.5, 0, Math.PI * 2); armCtx.stroke();
+      armCtx.beginPath();
+      armCtx.moveTo(targetX - 11, targetY); armCtx.lineTo(targetX + 11, targetY);
+      armCtx.moveTo(targetX, targetY - 11); armCtx.lineTo(targetX, targetY + 11);
+      armCtx.stroke();
+    }
+
+    if (mode === 'adm') {
+      armCtx.beginPath(); armCtx.moveTo(targetX, targetY); armCtx.lineTo(admX, admY);
+      armCtx.strokeStyle = '#d97706'; armCtx.setLineDash([3, 3]); armCtx.lineWidth = 1.6; armCtx.stroke(); armCtx.setLineDash([]);
+      armCtx.beginPath(); armCtx.arc(admX, admY, 6, 0, Math.PI * 2); armCtx.fillStyle = '#d97706'; armCtx.fill();
+      armCtx.font = '700 11px -apple-system, sans-serif'; armCtx.fillStyle = '#92400e';
+      armCtx.fillText('x_cmd 退让点', admX + 8, admY - 5);
+    }
+
+    armCtx.fillStyle = '#18181b';
+    armCtx.beginPath();
+    armCtx.roundRect(BASE_X - 22, BASE_Y + 6, 44, 14, 4);
+    armCtx.fill();
+
+    armCtx.beginPath(); armCtx.moveTo(BASE_X, BASE_Y); armCtx.lineTo(pos.x1, pos.y1);
+    armCtx.strokeStyle = '#18181b'; armCtx.lineWidth = 12; armCtx.lineCap = 'round'; armCtx.stroke();
+    armCtx.beginPath(); armCtx.moveTo(BASE_X, BASE_Y); armCtx.lineTo(pos.x1, pos.y1);
+    armCtx.strokeStyle = '#0071e3'; armCtx.lineWidth = 6.5; armCtx.lineCap = 'round'; armCtx.stroke();
+
+    armCtx.beginPath(); armCtx.moveTo(pos.x1, pos.y1); armCtx.lineTo(pos.x2, pos.y2);
+    armCtx.strokeStyle = '#18181b'; armCtx.lineWidth = 9.5; armCtx.lineCap = 'round'; armCtx.stroke();
+    armCtx.beginPath(); armCtx.moveTo(pos.x1, pos.y1); armCtx.lineTo(pos.x2, pos.y2);
+    armCtx.strokeStyle = '#38bdf8'; armCtx.lineWidth = 5; armCtx.lineCap = 'round'; armCtx.stroke();
+
+    [{ x: BASE_X, y: BASE_Y, r: 9 }, { x: pos.x1, y: pos.y1, r: 7.5 }].forEach(jt => {
+      armCtx.beginPath(); armCtx.arc(jt.x, jt.y, jt.r, 0, Math.PI * 2);
+      armCtx.fillStyle = '#ffffff'; armCtx.fill();
+      armCtx.lineWidth = 2.6; armCtx.strokeStyle = '#18181b'; armCtx.stroke();
+    });
+
+    if (mode === 'adm' || mode === 'hybrid') {
+      armCtx.beginPath(); armCtx.arc(pos.x2, pos.y2, 12.5, 0, Math.PI * 2);
+      armCtx.strokeStyle = '#d97706'; armCtx.lineWidth = 2.6; armCtx.stroke();
+    }
+
+    armCtx.beginPath(); armCtx.arc(pos.x2, pos.y2, 7.5, 0, Math.PI * 2);
+    armCtx.fillStyle = lastContactForce.mag > 42 ? '#b91c1c' : '#0071e3'; armCtx.fill();
+    armCtx.lineWidth = 2; armCtx.strokeStyle = '#ffffff'; armCtx.stroke();
+
+    if (lastContactForce.mag > 1.2) {
+      const ax = pos.x2 + lastContactForce.fx * 1.35, ay = pos.y2 + lastContactForce.fy * 1.35;
+      armCtx.beginPath(); armCtx.moveTo(pos.x2, pos.y2); armCtx.lineTo(ax, ay);
+      armCtx.strokeStyle = '#b91c1c'; armCtx.lineWidth = 2.6; armCtx.stroke();
+      const ang = Math.atan2(ay - pos.y2, ax - pos.x2);
+      armCtx.beginPath();
+      armCtx.moveTo(ax, ay);
+      armCtx.lineTo(ax - 7.5 * Math.cos(ang - 0.45), ay - 7.5 * Math.sin(ang - 0.45));
+      armCtx.lineTo(ax - 7.5 * Math.cos(ang + 0.45), ay - 7.5 * Math.sin(ang + 0.45));
+      armCtx.closePath();
+      armCtx.fillStyle = '#b91c1c'; armCtx.fill();
+      armCtx.font = '700 11px -apple-system, sans-serif';
+      armCtx.fillText(`${lastContactForce.mag.toFixed(0)} N`, ax + 5, ay - 4);
+    }
+
+    armCtx.fillStyle = '#4b5563';
+    armCtx.font = '600 11.5px -apple-system, sans-serif';
+    if (mode === 'zerog') {
+      armCtx.fillText(
+        chkGravComp.checked ? '状态：零重力悬停中 — 按住蓝色手爪拖动即可录制轨迹' : '⚠ 状态：已关闭重力补偿 G(q) — 手臂受自重下坠',
+        12, 19
+      );
+    } else if (mode === 'hybrid') {
+      armCtx.fillText('状态：力位混合巡航中 — 切向控位 + 法向恒压闭环', 12, 19);
+    } else {
+      armCtx.fillText('操作提示：拖拽绿色十字移动目标，或直接拉动蓝色手爪施力', 12, 19);
+    }
+
+    const wW = waveCanvas.width, wH = waveCanvas.height;
+    waveCtx.clearRect(0, 0, wW, wH);
+    const yOf = (f) => wH - 12 - (Math.min(60, Math.max(0, f)) / 60) * (wH - 22);
+    const yWarn = yOf(42);
+    waveCtx.beginPath(); waveCtx.moveTo(0, yWarn); waveCtx.lineTo(wW, yWarn);
+    waveCtx.strokeStyle = 'rgba(185, 28, 28, 0.35)'; waveCtx.setLineDash([4, 4]); waveCtx.lineWidth = 1; waveCtx.stroke(); waveCtx.setLineDash([]);
+
+    waveCtx.fillStyle = '#71717a';
+    waveCtx.font = '600 10.5px -apple-system, sans-serif';
+    waveCtx.fillText('最近 4 秒接触力曲线 (0–60 N) · 红虚线 = 42N 刚性过载报警线', 4, 11);
+
+    if (mode === 'hybrid') {
+      waveCtx.beginPath();
+      targetForceHist.forEach((v, i) => {
+        const x = (i / (WAVE_LEN - 1)) * wW, y = yOf(v);
+        if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
+      });
+      waveCtx.strokeStyle = '#0d9488'; waveCtx.setLineDash([4, 3]); waveCtx.lineWidth = 1.6; waveCtx.stroke(); waveCtx.setLineDash([]);
+    }
+
+    waveCtx.beginPath();
+    forceHist.forEach((v, i) => {
+      const x = (i / (WAVE_LEN - 1)) * wW, y = yOf(v);
+      if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
+    });
+    waveCtx.strokeStyle = lastContactForce.mag > 42 ? '#b91c1c' : '#0071e3';
+    waveCtx.lineWidth = 2;
+    waveCtx.stroke();
+  }
+
+  let lastTime = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.033, (now - lastTime) / 1000);
+    lastTime = now;
+    stepPhysics(dt);
+    drawScene();
+    requestAnimationFrame(loop);
+  }
+
+  document.querySelectorAll('#armTableFilter .filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('#armTableFilter .filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      const cat = pill.dataset.cat;
+      document.querySelectorAll('#armMasterTable tbody tr').forEach(row => {
+        row.style.display = (cat === 'all' || row.dataset.cat.includes(cat)) ? '' : 'none';
+      });
+    });
+  });
+
+  syncModeUI();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
