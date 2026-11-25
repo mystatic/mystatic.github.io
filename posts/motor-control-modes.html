@@ -1,0 +1,2112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="从力矩、速度、位置与 MIT 阻抗控制四大基本功，到三环级联底层架构、实时动力学交互实验台、速度差分延迟破局，以及 CiA 402（PP/CSP/CSV/CST）总线标准全景拆解。">
+<meta name="category" content="硬件">
+<meta property="article:section" content="硬件">
+<meta name="article-format" content="交互教程">
+<link rel="canonical" href="https://mystatic.github.io/posts/motor-control-modes.html">
+<title>电机控制模式深度全解：从直觉比喻、三环架构到 CiA 402 与 MIT 力控｜Reading Notes</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface-alt: #f1f0ec;
+    --ink: #18181b;
+    --ink-secondary: #4b5563;
+    --ink-muted: #71717a;
+    --border: #e4e2dc;
+    --accent: #0071e3;       /* Tracker / Loop Blue */
+    --accent-soft: #e8f2ff;
+    --gen: #0d9488;          /* Generator / Mode Teal */
+    --gen-soft: #ccfbf1;
+    --commit: #d97706;       /* CiA 402 / Torque Amber */
+    --commit-soft: #fef3c7;
+    --orch: #4f46e5;         /* Deep Q&A / MIT Indigo */
+    --orch-soft: #eef2ff;
+    --good: #15803d;
+    --good-soft: #dcfce7;
+    --warn: #b91c1c;
+    --warn-soft: #fee2e2;
+    --code-bg: #14151a;
+    --code-ink: #e5e7eb;
+    --shadow: 0 4px 22px rgba(24, 24, 27, 0.05);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.72;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Sticky Topbar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(247, 247, 245, 0.9);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar-inner {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .home-back-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    transition: all 0.16s ease;
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
+  }
+
+  .home-back-pill:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+  }
+
+  .brand svg {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-secondary);
+    padding: 5px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+  }
+
+  .nav-links a:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .container {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 36px 24px 84px;
+  }
+
+  /* Hero Section */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 38px 38px 32px;
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, var(--orch), var(--gen), var(--accent), #f59e0b);
+  }
+
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .badge.teal {
+    background: var(--gen-soft);
+    color: #0f766e;
+  }
+
+  .badge.amber {
+    background: var(--commit-soft);
+    color: #92400e;
+    border: 1px solid #fde68a;
+  }
+
+  .badge.dark {
+    background: #18181b;
+    color: #f4f4f5;
+  }
+
+  .hero h1 {
+    font-size: 29px;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+
+  .hero-quote {
+    display: inline-block;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f766e;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+    padding: 6px 14px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+
+  .hero-sub {
+    color: var(--ink-secondary);
+    font-size: 15.5px;
+    margin-bottom: 22px;
+  }
+
+  .context-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .stat-box {
+    background: var(--surface-alt);
+    border-radius: 12px;
+    padding: 13px 15px;
+  }
+
+  .stat-box .k {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-weight: 600;
+    display: block;
+  }
+
+  .stat-box .v {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 2px 0 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-box .v.blue { color: var(--accent); }
+  .stat-box .v.teal { color: var(--gen); }
+  .stat-box .v.amber { color: var(--commit); }
+  .stat-box .v.indigo { color: var(--orch); }
+
+  .stat-box .d {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    line-height: 1.42;
+    display: block;
+  }
+
+  /* Section Card */
+  .sec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 36px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+    scroll-margin-top: 76px;
+  }
+
+  .sec-header {
+    background: linear-gradient(135deg, #eff6ff 0%, #fafaf9 100%);
+    border: 1px solid #bfdbfe;
+    border-left: 5px solid var(--accent);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 26px;
+  }
+
+  .sec-header.teal {
+    background: linear-gradient(135deg, #f0fdfa 0%, #fafaf9 100%);
+    border-color: #99f6e4;
+    border-left-color: var(--gen);
+  }
+
+  .sec-header.indigo {
+    background: linear-gradient(135deg, #eef2ff 0%, #fafaf9 100%);
+    border-color: #c7d2fe;
+    border-left-color: var(--orch);
+  }
+
+  .sec-header.amber {
+    background: linear-gradient(135deg, #fffbeb 0%, #fafaf9 100%);
+    border-color: #fde68a;
+    border-left-color: var(--commit);
+  }
+
+  .sec-tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 5px;
+  }
+
+  .sec-header.teal .sec-tag { color: var(--gen); }
+  .sec-header.indigo .sec-tag { color: var(--orch); }
+  .sec-header.amber .sec-tag { color: var(--commit); }
+
+  .sec-title {
+    font-size: 21px;
+    font-weight: 750;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  .tldr-callout {
+    background: #fffbeb;
+    border: 1px solid #fde047;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 26px;
+    font-size: 15px;
+  }
+
+  .tldr-callout strong {
+    color: #78350f;
+  }
+
+  h3 {
+    font-size: 18.5px;
+    font-weight: 700;
+    margin: 30px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+  }
+
+  h3 .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  h3 .step-num.teal { background: var(--gen); }
+  h3 .step-num.indigo { background: var(--orch); }
+  h3 .step-num.amber { background: var(--commit); }
+
+  p {
+    margin-bottom: 14px;
+    color: #27272a;
+  }
+
+  ul, ol {
+    margin: 8px 0 18px 22px;
+  }
+
+  li {
+    margin-bottom: 8px;
+    color: #27272a;
+  }
+
+  li strong {
+    color: var(--ink);
+  }
+
+  code {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: #1f2937;
+  }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 16px 20px;
+    border-radius: 12px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.62;
+    margin: 12px 0 20px;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  .tok-cmt { color: #6b7280; font-style: italic; }
+  .tok-key { color: #93c5fd; }
+  .tok-fn  { color: #fde047; font-weight: 700; }
+  .tok-str { color: #86efac; }
+  .tok-num { color: #fca5a5; }
+
+  /* 4-Mode Grid (.pipe-grid) */
+  .pipe-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 16px 0 24px;
+  }
+
+  .pipe-box {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--gen);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+
+  .pipe-box.top-amber { border-top-color: var(--commit); }
+  .pipe-box.top-teal  { border-top-color: var(--gen); }
+  .pipe-box.top-blue  { border-top-color: var(--accent); }
+  .pipe-box.top-indigo { border-top-color: var(--orch); }
+
+  .pipe-box small {
+    display: block;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--gen);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+
+  .pipe-box.top-amber small { color: var(--commit); }
+  .pipe-box.top-blue small  { color: var(--accent); }
+  .pipe-box.top-indigo small { color: var(--orch); }
+
+  .pipe-box b {
+    display: block;
+    font-size: 16.5px;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+
+  .pipe-motto {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gen);
+    padding: 7px 11px;
+    border-radius: 6px;
+    font-size: 13.2px;
+    font-weight: 650;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .pipe-box.top-amber .pipe-motto { border-left-color: var(--commit); }
+  .pipe-box.top-blue .pipe-motto  { border-left-color: var(--accent); }
+  .pipe-box.top-indigo .pipe-motto { border-left-color: var(--orch); }
+
+  .pipe-box p {
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin-bottom: 8px;
+  }
+  .pipe-box p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 3-State Grid (.insight-grid 3-col variant) */
+  .insight-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .insight-card {
+    background: #fafaf9;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+
+  .insight-card .num-chip {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--orch-soft);
+    color: var(--orch);
+    margin-bottom: 8px;
+  }
+
+  .insight-card .num-chip.teal { background: var(--gen-soft); color: #0f766e; }
+  .insight-card .num-chip.amber { background: var(--commit-soft); color: #92400e; }
+  .insight-card .num-chip.blue { background: var(--accent-soft); color: var(--accent); }
+
+  .insight-card h4 {
+    font-size: 15.5px;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+
+  .insight-card p {
+    font-size: 13.8px;
+    color: var(--ink-secondary);
+    margin-bottom: 0;
+  }
+
+  /* Architecture 3-Layer Stack */
+  .arch-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 18px 0 22px;
+  }
+
+  .arch-layer {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    background: #fafaf9;
+    display: grid;
+    grid-template-columns: 235px 1fr;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .arch-layer.l-orch { border-left: 5px solid var(--orch); }
+  .arch-layer.l-gen  { border-left: 5px solid var(--gen); }
+  .arch-layer.l-trk  { border-left: 5px solid var(--accent); }
+
+  .arch-title {
+    font-weight: 750;
+    font-size: 15px;
+    color: var(--ink);
+  }
+
+  .arch-freq {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: 5px;
+  }
+
+  .l-orch .arch-freq { background: var(--orch-soft); color: var(--orch); }
+  .l-gen  .arch-freq { background: var(--gen-soft); color: #0f766e; }
+  .l-trk  .arch-freq { background: var(--accent-soft); color: var(--accent); }
+
+  .arch-hw {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+  }
+
+  .arch-desc {
+    font-size: 14.5px;
+    color: var(--ink-secondary);
+  }
+
+  .arch-arrow {
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .quote-box {
+    background: var(--surface-alt);
+    border-left: 4px solid var(--commit);
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin: 14px 0 22px;
+  }
+
+  /* Interactive Bench Lab (.bench-box style) */
+  .bench-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 22px 24px;
+    margin: 16px 0 8px;
+  }
+
+  .bench-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .bench-title {
+    font-weight: 750;
+    font-size: 15.5px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mode-pill-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .mode-pill {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-secondary);
+    padding: 6px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .mode-pill:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .mode-pill.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 113, 227, 0.22);
+  }
+
+  .preset-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  .preset-btn {
+    border: 1px dashed #cbd5e1;
+    background: #ffffff;
+    color: var(--ink-secondary);
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.14s ease;
+  }
+
+  .preset-btn:hover {
+    border-style: solid;
+    border-color: var(--gen);
+    color: #0f766e;
+    background: #f0fdfa;
+  }
+
+  .sim-grid {
+    display: grid;
+    grid-template-columns: 1.08fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .sim-stage {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+
+  canvas#motorCanvas {
+    display: block;
+    width: 100%;
+    max-width: 340px;
+    height: 220px;
+    margin: 0 auto;
+  }
+
+  .sim-legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin: 4px 0 10px;
+  }
+
+  .sim-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .dot-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  canvas#waveCanvas {
+    display: block;
+    width: 100%;
+    height: 92px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 6px;
+  }
+
+  .sim-status-banner {
+    margin-top: 8px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-size: 12.5px;
+    color: var(--ink-secondary);
+    line-height: 1.5;
+  }
+
+  .sim-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .readout-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .readout-cell {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 9px 10px;
+    text-align: center;
+  }
+
+  .readout-cell .rk {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    font-weight: 600;
+  }
+
+  .readout-cell .rv {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+
+  .trq-meter-box {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 13px;
+  }
+
+  .trq-meter-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--ink-secondary);
+    margin-bottom: 6px;
+  }
+
+  .bidir-track {
+    position: relative;
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .bidir-mid {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #64748b;
+    z-index: 2;
+  }
+
+  .bidir-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width 0.05s linear, left 0.05s linear;
+  }
+
+  .ctrl-card {
+    background: var(--surface);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 13px;
+  }
+
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 650;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .ctrl-label span.val {
+    font-family: ui-monospace, "SF Mono", monospace;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .push-action-btn {
+    width: 100%;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: var(--warn);
+    padding: 11px 16px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 750;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s ease;
+  }
+
+  .push-action-btn:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+  }
+
+  .push-action-btn:active, .push-action-btn.is-pushing {
+    background: var(--warn);
+    color: #ffffff;
+    border-color: var(--warn);
+    transform: scale(0.99);
+  }
+
+  /* Sub-Q&A Divider Blocks */
+  .sub-qa {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 26px;
+    margin-top: 24px;
+    background: #fcfcfb;
+  }
+
+  .sub-qa-q {
+    font-size: 17.5px;
+    font-weight: 750;
+    color: var(--ink);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px dashed var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .sub-qa-q .q-badge {
+    background: var(--ink);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 2px 9px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Two-column contrast cards */
+  .contrast-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 16px 0 18px;
+  }
+
+  .contrast-card {
+    border-radius: 14px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+  }
+
+  .contrast-card.good {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+  }
+
+  .contrast-card.bad {
+    background: #fef2f2;
+    border-color: #fecaca;
+  }
+
+  .contrast-card.info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }
+
+  .contrast-card.amber {
+    background: #fffbeb;
+    border-color: #fde68a;
+  }
+
+  .contrast-card h4 {
+    font-size: 15px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .contrast-card.good h4 { color: var(--good); }
+  .contrast-card.bad h4  { color: var(--warn); }
+  .contrast-card.info h4 { color: var(--accent); }
+  .contrast-card.amber h4 { color: #92400e; }
+
+  .contrast-card p, .contrast-card ul {
+    font-size: 13.8px;
+    margin-bottom: 0;
+    color: var(--ink-secondary);
+  }
+
+  /* Tables & Filter Bar */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 12px 0 12px;
+  }
+
+  .filter-pill {
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--ink-secondary);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-pill.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: #ffffff;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 10px 0 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: var(--surface);
+  }
+
+  th, td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--surface-alt);
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr.highlight-row td {
+    background: #eff6ff;
+  }
+
+  .pill-ok, .pill-warn, .pill-part {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .pill-ok   { background: var(--good-soft); color: var(--good); }
+  .pill-warn { background: var(--commit-soft); color: #92400e; }
+  .pill-part { background: #e0e7ff; color: #3730a3; }
+
+  .warn-note {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-top: 18px;
+    font-size: 14.2px;
+  }
+
+  .warn-note strong {
+    color: #92400e;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-muted);
+    padding-top: 12px;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  @media (max-width: 820px) {
+    .topbar-inner {
+      padding: 10px 16px;
+      gap: 8px;
+    }
+    .nav-links {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      width: 100%;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .nav-links::-webkit-scrollbar {
+      display: none;
+    }
+    .context-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .pipe-grid,
+    .contrast-grid,
+    .insight-grid-3,
+    .sim-grid {
+      grid-template-columns: 1fr;
+    }
+    .arch-layer {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .hero, .sec-card {
+      padding: 24px 20px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-left">
+      <a class="home-back-pill" href="../index.html">← 返回博客首页</a>
+      <a class="brand" href="#top">
+        <svg viewBox="0 0 36 36" fill="none" aria-hidden="true">
+          <rect width="36" height="36" rx="9" fill="#18181B"/>
+          <circle cx="18" cy="18" r="9.5" stroke="#4FD1C5" stroke-width="2" stroke-dasharray="4 2.5"/>
+          <circle cx="18" cy="18" r="3.2" fill="#F5F5F7"/>
+          <path d="M18 18L25.5 11.5" stroke="#2997FF" stroke-width="2.6" stroke-linecap="round"/>
+          <circle cx="25.5" cy="11.5" r="2.2" fill="#F59E0B"/>
+        </svg>
+        <span>电机控制模式深度全解</span>
+      </a>
+    </div>
+    <nav class="nav-links">
+      <a href="#sec-modes">01 · 四大核心模式</a>
+      <a href="#sec-loop-lab">02 · 三环架构与体验台</a>
+      <a href="#sec-qa">03 · 两大核心追问</a>
+      <a href="#sec-cia402">04 · CiA 402 与速查表</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container" id="top">
+
+  <!-- ==================== HERO ==================== -->
+  <section class="hero">
+    <div class="badge-row">
+      <span class="badge dark">Robotics Actuator Notes · 2026</span>
+      <span class="badge">基础：力矩 / 速度 / 位置三环</span>
+      <span class="badge teal">足式与协作：MIT 阻抗控制</span>
+      <span class="badge amber">工业总线：CiA 402 (PP / CSP / CST)</span>
+    </div>
+    <h1>电机控制模式全景拆解：从手臂直觉到工业与具身智能行话</h1>
+    <div class="hero-quote">“把电机想象成你自己的手臂 —— 大脑下达指令的不同方式，决定了它是大力士、定速巡航、站军姿士兵，还是有弹性的真实肌肉。”</div>
+    <p class="hero-sub">
+      本文档系统梳理了工业伺服、无人机电调、协作机械臂与人形/四足机器人关节中最核心的 <strong>4 大基础工作模式与 3 类辅助状态</strong>，剖析内部<strong>三环级联“俄罗斯套娃”架构</strong>并内置<strong>实时动力学交互体验台</strong>，深入解答<strong>“只发位置怎么算速度、差分慢一帧怎么破”</strong>两大实战痛点，最后一张表打通 <strong>CiA 402 标准（PP / CSP / CSV / CST）</strong>全部英文缩写。
+    </p>
+    <div class="context-grid">
+      <div class="stat-box">
+        <span class="k">最内层 · 电流/力矩环带宽</span>
+        <div class="v amber">20–40 kHz</div>
+        <span class="d">直接控制线圈交轴电流 Iq，决定肌肉瞬时发力大小</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">中间层 · 速度闭环频率</span>
+        <div class="v teal">1–4 kHz</div>
+        <span class="d">根据阻力实时增减电流，死守期望转速不掉速</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">最外层 · 位置 / CSP 同步周期</span>
+        <div class="v blue">~1 kHz (1 ms)</div>
+        <span class="d">多关节听同一节拍器齐步走，走出高精度空间直线圆弧</span>
+      </div>
+      <div class="stat-box">
+        <span class="k">机器人主流 · MIT 阻抗接口</span>
+        <div class="v indigo">5 参数混合</div>
+        <span class="d">融合虚拟弹簧 Kp、虚拟阻尼 Kd 与前馈力矩，柔顺抗冲击</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 01: 4 CORE MODES ==================== -->
+  <section class="sec-card" id="sec-modes">
+    <div class="sec-header teal">
+      <span class="sec-tag">Part 01 · 核心四大工作模式与日常辅助状态</span>
+      <div class="sec-title">面对外部阻力时，电机到底该“保力气”、“保转速”、“保位置”还是“柔顺让步”？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>直觉总纲：</strong>无论电机手册把名字起得多么眼花缭乱，物理世界里电机能管的事情只有三件——<strong>出多大力（Torque）</strong>、<strong>转多快（Velocity）</strong>、<strong>停在哪（Position）</strong>，外加把三者柔顺捏合在一起的<strong>阻抗运控模式（MIT Mode）</strong>。看懂它们在“被人伸手阻挡时”的不同脾气，就彻底抓住了本质。
+    </div>
+
+    <h3><span class="step-num teal">1</span>四大核心工作模式逐一拆解</h3>
+    <div class="pipe-grid">
+      <div class="pipe-box top-amber">
+        <small>Mode 01 · Torque / Current Mode</small>
+        <b>力矩模式（电流模式）—— “只管出多少力”</b>
+        <div class="pipe-motto">口诀：我只管使多大劲，至于转多快、转到哪，随缘！</div>
+        <p><strong>生动比喻：</strong>就像你<strong>闭着眼用恒定 5 斤的力气推门</strong>。门如果没锁（空载），“嗖”一下就飞快撞开（转速狂飙，俗称<strong>空载飞车</strong>）；门后如果抵着沙发推不动，它就安静停住，但依然稳稳输出 5 斤推力，绝不会暴走把门撞碎。</p>
+        <p><strong>为什么又叫电流模式？</strong>电机电磁力矩与交轴电流成正比（<code>τ = Kt × Iq</code>），控制安培数就是直接控制肌肉发力。常见于<strong>定力矩电动螺丝刀、恒张力收卷机、电动车油门踏板</strong>。</p>
+      </div>
+
+      <div class="pipe-box top-teal">
+        <small>Mode 02 · Velocity Mode</small>
+        <b>速度模式 —— “不管多累，死守转速”</b>
+        <div class="pipe-motto">口诀：哪怕上刀山下火海，每秒也必须转这么多圈！</div>
+        <p><strong>生动比喻：</strong>就像汽车开启了<strong>定速巡航（60 km/h）</strong>或健身房里的<strong>跑步机</strong>。遇到上坡阻力增大，驱动器立刻自动“猛踩油门”加大电流保住转速；遇到下坡顺风推着走，自动收劲甚至反向制动防止超速。</p>
+        <p><strong>典型场景：</strong>工厂流水线传送带、激光雷达旋转电机、扫地机器人驱动轮、无人机螺旋桨。</p>
+      </div>
+
+      <div class="pipe-box top-blue">
+        <small>Mode 03 · Position Mode</small>
+        <b>位置模式 —— “指哪打哪，寸步不让”</b>
+        <div class="pipe-motto">口诀：让我停在 90°，少一度、多一度我都跟你急！</div>
+        <p><strong>生动比喻：</strong>就像<strong>站军姿的士兵</strong>把手臂平举在 90°。有人往下压他的手，他就拼命往上顶；有人往上抬，他就使劲往下压，死活都要钉在目标角度。工程中又分<strong>直接位置</strong>（猛冲过去）与<strong>梯形/S曲线轨迹位置</strong>（像端热汤走路，自动缓起步、匀速、慢刹车）。</p>
+        <p><strong>典型场景：</strong>3D 打印机喷头定位、传统工业机械臂定点抓取、监控摄像头云台、航模舵机。</p>
+      </div>
+
+      <div class="pipe-box top-indigo">
+        <small>Mode 04 · MIT / Impedance Mode</small>
+        <b>运控模式 / 阻抗模式 —— “有弹性的真实肌肉”</b>
+        <div class="pipe-motto">口诀：既想去目标位置，又懂得能屈能伸，绝不硬碰硬！</div>
+        <p><strong>生动比喻：</strong>纯位置模式太死板——机器狗从桌面跳下若死守关节角，齿轮当场震断。<strong>MIT 模式</strong>给关节装上了<strong>“虚拟弹簧（刚度 Kp）+ 虚拟液压减震器（阻尼 Kd）+ 预留托举力（前馈 τ_ff）”</strong>：离目标越远拉回力越大，动得越快刹车阻尼越强，外力猛撞时温柔缓冲让步。</p>
+        <p><strong>典型场景：</strong>四足机器狗奔跑落地缓冲、人形机器人全身步态、协作机械臂防撞与手把手拖动示教。</p>
+      </div>
+    </div>
+
+    <h3><span class="step-num teal">2</span>上电与急停必打交道的 3 个辅助状态</h3>
+    <div class="insight-grid-3">
+      <div class="insight-card">
+        <span class="num-chip blue">State A · Idle / Free</span>
+        <h4>失能 / 自由模式（“彻底躺平”）</h4>
+        <p>驱动器切断三相功率输出，电机线圈不通电，整条手臂像脱臼一样毫无阻力，用手轻轻一拨就能自由转动。常用于调试摆放姿态或故障安全释放。</p>
+      </div>
+      <div class="insight-card">
+        <span class="num-chip teal">State B · Damping / Brake</span>
+        <h4>阻尼 / 刹车模式（“水里挥拳”）</h4>
+        <p>电机不主动去任何位置，但把三相绕组短接或仅开启纯速度负反馈：<strong>慢推能挪动，猛推阻力极大</strong>（如同在水池里挥手）。断电急停时让沉重的机械臂慢悠悠垂下，防止“哐当”砸坏桌面。</p>
+      </div>
+      <div class="insight-card">
+        <span class="num-chip amber">State C · Homing (HM)</span>
+        <h4>回零 / 校准模式（“摸黑找墙角”）</h4>
+        <p>增量式编码器刚通电时“失忆”不知道当前在几度。回零模式让电机慢速往一侧转，直到触发光电限位开关或顶到机械硬挡块（电流突增），“咚”一声把此处记为 <code>0°</code> 原点。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 02: 3-LOOP STACK + INTERACTIVE LAB ==================== -->
+  <section class="sec-card" id="sec-loop-lab">
+    <div class="sec-header">
+      <span class="sec-tag">Part 02 · 底层揭秘与实时动力学交互体验</span>
+      <div class="sec-title">为什么说位置、速度、力矩其实是同一个“俄罗斯套娃”？亲手推一推会发生什么？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>架构本质：</strong>伺服驱动器内部并不是三套互不相干的电路，而是像一家<strong>“老板管经理、经理管员工”的三级嵌套公司（三环串级控制）</strong>。越往内层离物理线圈越近、执行频率越高：位置环算目标速度 → 速度环算目标电流 → 电流环直接推功率管发力。
+    </div>
+
+    <h3><span class="step-num">1</span>三环级联控制栈（Cascaded Control Loops）</h3>
+    <p>不同控制模式的区别，本质上就是<strong>你的上位机指令从哪一层插队进去</strong>：</p>
+
+    <div class="arch-stack">
+      <div class="arch-layer l-orch">
+        <div>
+          <div class="arch-title">A · 外环：位置环（大老板）</div>
+          <span class="arch-freq">~1 kHz（每 1 毫秒）</span>
+          <span class="arch-hw">切入模式：位置模式 / PP / CSP</span>
+        </div>
+        <div class="arch-desc">
+          只盯<strong>角度误差</strong>（<code>目标角度 - 编码器实际角度</code>）。老板看离 90° 还差得远，立刻向下一层下达追赶指令：“部门经理，现在按每秒 2 圈的速度全速追上去！”到终点附近误差归零，指令转速也随之归零。
+        </div>
+      </div>
+      <div class="arch-arrow">↓ 输出期望转速指令 <code>v_ref</code>（若选“速度模式”，直接跳过大老板从这里喂指令）</div>
+      <div class="arch-layer l-gen">
+        <div>
+          <div class="arch-title">B · 中环：速度环（部门经理）</div>
+          <span class="arch-freq">1–4 kHz（每 0.25–1 毫秒）</span>
+          <span class="arch-hw">切入模式：速度模式 / PV / CSV</span>
+        </div>
+        <div class="arch-desc">
+          紧盯<strong>转速码表误差</strong>（<code>期望转速 - 实际转速</code>），通常带积分器（PI 控制）。一旦发现上坡掉速，经理立刻拍桌子向下层吼道：“一线员工把电流从 2A 加到 8A 顶住！”直到把速度误差彻底抹平。
+        </div>
+      </div>
+      <div class="arch-arrow">↓ 输出期望交轴电流/力矩 <code>Iq_ref</code>（若选“力矩模式”或“MIT 合成力矩”，直接从这里直通底层）</div>
+      <div class="arch-layer l-trk">
+        <div>
+          <div class="arch-title">C · 内环：电流 / 力矩环（一线员工）</div>
+          <span class="arch-freq">20–40 kHz（FOC 磁场定向控制）</span>
+          <span class="arch-hw">切入模式：力矩模式 / PT / CST / MIT</span>
+        </div>
+        <div class="arch-desc">
+          每秒钟高频采样三相电流数万次，通过空间矢量脉宽调制（SVPWM）直接驱动 MOS 管输出电磁转矩。这是所有模式最终落地的“肌肉纤维”，响应快至几十微秒。
+        </div>
+      </div>
+    </div>
+
+    <div class="quote-box">
+      <strong>特别注意 —— MIT 模式在套娃里的特殊通道：</strong>传统位置模式走完“位置环 → 速度环（含积分器 I）→ 电流环”，积分器虽然能消除静差，但被外力撞击时会越憋越狠、显得僵硬笨重。<strong>MIT 模式直接跳过传统串级速度 PI 环</strong>，在单层公式里把 <code>Kp×位置差 + Kd×速度差 + 前馈力矩</code> 一次性算成总力矩，直通最底层的 <strong>电流/力矩环</strong>，因此具备极佳的反向驱动柔顺性（Backdrivability）。
+    </div>
+
+    <h3><span class="step-num">2</span>交互实验台：亲手“推一推”不同模式下的电机</h3>
+    <p>理解了三环原理后，不妨在下方单关节动力学仿真器中切换 6 种工作模式，点击<strong>典型工况预设</strong>，并<strong>按住红色按钮模拟人手强行掰动电机连杆</strong>，观察圆盘响应与最近 6 秒的角度跟随波形：</p>
+
+    <div class="bench-box">
+      <div class="bench-head">
+        <div class="bench-title">
+          <span>单关节实时闭环动力学实验台</span>
+          <span class="pill-part">60 FPS 物理积分 · 限幅 ±9.5 N·m</span>
+        </div>
+        <span style="font-size:12px;color:var(--ink-muted);">虚线绿针 = 目标角度 · 实线蓝杆 = 电机实际连杆</span>
+      </div>
+
+      <div class="mode-pill-bar" id="modeTabs">
+        <button class="mode-pill active" data-mode="mit">MIT 阻抗模式（弹性肌肉）</button>
+        <button class="mode-pill" data-mode="pos">位置模式（刚性死守）</button>
+        <button class="mode-pill" data-mode="vel">速度模式（定速巡航）</button>
+        <button class="mode-pill" data-mode="trq">力矩模式（恒力输出）</button>
+        <button class="mode-pill" data-mode="damp">阻尼模式（水中挥拳）</button>
+        <button class="mode-pill" data-mode="free">失能模式（断电躺平）</button>
+      </div>
+
+      <div class="preset-bar">
+        <span>一键典型工况预设：</span>
+        <button class="preset-btn" data-preset="soft-spring">柔顺橡皮筋 (低 Kp)</button>
+        <button class="preset-btn" data-preset="underdamped">低阻尼来回震荡 (高 Kp 低 Kd)</button>
+        <button class="preset-btn" data-preset="gravity-ff">带载稳态下垂 vs 前馈补偿</button>
+        <button class="preset-btn" data-preset="vel-load">定速爬坡抗载 (速度环发威)</button>
+        <button class="preset-btn" data-preset="trq-runaway">空载力矩飞车</button>
+      </div>
+
+      <div class="sim-grid">
+        <div class="sim-stage">
+          <canvas id="motorCanvas" width="340" height="220"></canvas>
+          <div class="sim-legend">
+            <span><i class="dot-swatch" style="background:#0d9488"></i>目标参考位置</span>
+            <span><i class="dot-swatch" style="background:#0071e3"></i>实际输出连杆</span>
+            <span><i class="dot-swatch" style="background:#b91c1c"></i>外部逆向推力</span>
+          </div>
+          <canvas id="waveCanvas" width="440" height="92"></canvas>
+          <div class="sim-status-banner" id="simHint">
+            <strong>MIT 阻抗模式：</strong>像装了虚拟弹簧与液压减震器，按住下方按钮猛推连杆会温柔让步，松手后平顺回弹且无超调震荡。
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <div class="readout-grid">
+            <div class="readout-cell">
+              <div class="rk">当前实际角度</div>
+              <div class="rv" id="valAngle">90°</div>
+            </div>
+            <div class="readout-cell">
+              <div class="rk">当前实际转速</div>
+              <div class="rv" id="valVel">0 rpm</div>
+            </div>
+            <div class="readout-cell">
+              <div class="rk">执行力矩 (Iq)</div>
+              <div class="rv" id="valTrq">0.0 N·m</div>
+            </div>
+          </div>
+
+          <div class="trq-meter-box">
+            <div class="trq-meter-head">
+              <span>双向实时力矩负荷条（左负右正）</span>
+              <span id="valTrqStatus">正常区间</span>
+            </div>
+            <div class="bidir-track">
+              <div class="bidir-mid"></div>
+              <div class="bidir-fill" id="trqBarFill" style="left:50%;width:0%;"></div>
+            </div>
+          </div>
+
+          <div class="ctrl-card" id="ctrlTargetRow">
+            <div class="ctrl-label">
+              <span id="lblTarget">目标角度 q_des</span>
+              <span class="val" id="valTargetDisp">90°</span>
+            </div>
+            <input type="range" id="rngTarget" min="0" max="359" value="90" />
+          </div>
+
+          <div class="ctrl-card" id="ctrlMitRow">
+            <div class="ctrl-label">
+              <span>虚拟弹簧刚度 Kp</span>
+              <span class="val" id="valKpDisp">30（中等弹性）</span>
+            </div>
+            <input type="range" id="rngKp" min="4" max="90" value="30" />
+
+            <div class="ctrl-label" style="margin-top:8px;">
+              <span>虚拟减震阻尼 Kd</span>
+              <span class="val" id="valKdDisp">10（临界适中）</span>
+            </div>
+            <input type="range" id="rngKd" min="0" max="30" value="10" />
+
+            <div class="ctrl-label" style="margin-top:8px;">
+              <span>前馈补偿力矩 τ_ff</span>
+              <span class="val" id="valFfDisp">0.0 N·m</span>
+            </div>
+            <input type="range" id="rngFf" min="-50" max="50" value="0" />
+          </div>
+
+          <div class="ctrl-card">
+            <div class="ctrl-label">
+              <span>环境持续反向负载（模拟挂重物 / 上坡）</span>
+              <span class="val" id="valLoadDisp">0.0 N·m</span>
+            </div>
+            <input type="range" id="rngLoad" min="0" max="60" value="0" />
+          </div>
+
+          <button class="push-action-btn" id="btnPush" type="button">
+            按住不放：用手逆向猛推一下电机连杆（施加 -5.2 N·m 冲击）
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 03: 2 DEEP Q&A ==================== -->
+  <section class="sec-card" id="sec-qa">
+    <div class="sec-header indigo">
+      <span class="sec-tag">Part 03 · 进阶灵魂二连问深度拆解</span>
+      <div class="sec-title">只发位置点位没给速度，电机怎么转起来的？前后帧做减法算速度慢一帧怎么破？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>从看懂概念到写控制代码的两层窗户纸：</strong>很多开发者第一次写机器狗或机械臂底层驱动时会卡在两个细节上：① 我明明只规划了关节角度轨迹，MIT 模式的 <code>目标速度</code> 该填啥？填 <code>0</code> 会怎样？② 如果用 <code>(这次位置 - 上次位置) / dt</code> 算速度，岂不是永远拿过去当现在、天然慢一帧？下面逐一拆透。
+    </div>
+
+    <!-- Sub-Q1 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 1</span>
+        <span>我只发了位置点位、没告诉电机速度，MIT 模式和普通位置模式分别是怎么算出速度的？</span>
+      </div>
+
+      <p>这两者的内部处理哲学截然相反——<strong>MIT 模式像个“一根筋的耿直理工男”，你没给它就真不替你算；普通位置 / CSP 模式则像个“聪明管家”，内部靠两招自动无中生有：</strong></p>
+
+<pre><code><span class="tok-cmt"># 1. MIT 模式驱动器内部执行的唯一死公式（五参数输入：q_des, dq_des, Kp, Kd, tau_ff）</span>
+tau_cmd = Kp * (q_des - q_actual) + Kd * (<span class="tok-fn">dq_des</span> - dq_actual) + tau_ff
+
+<span class="tok-cmt"># 2. 普通位置 / CSP 伺服驱动器内部执行的串级 + 内部速度前馈逻辑（仅需输入 q_des[k]）</span>
+v_feedback    = Kp_pos * (q_des[k] - q_actual)             <span class="tok-cmt"># 第一招：按距离差折算追赶速度</span>
+v_feedforward = K_vff  * (q_des[k] - q_des[k-<span class="tok-num">1</span>]) / dt_bus  <span class="tok-cmt"># 第二招：相邻两点自动差分打提前量</span>
+v_target_loop = v_feedback + v_feedforward                 <span class="tok-cmt"># 送入内层高增益速度 PI 环</span></code></pre>
+
+      <div class="contrast-grid">
+        <div class="contrast-card amber">
+          <h4>在 MIT 模式里：填 0 会引发“水下追人效应”</h4>
+          <ul>
+            <li><strong>定点保持（去 90° 停着）：</strong>终点静止不动，<code>dq_des = 0</code> 完全正确！阻尼项安心充当刹车片抑制震荡。</li>
+            <li><strong>连续发移动轨迹却填 <code>dq_des = 0</code>：</strong>公式后半截退化为 <code>-Kd × 当前速度</code>，出现<strong>“左右互搏”</strong>——弹簧 <code>Kp</code> 拼命拽着往前跑，阻尼器 <code>Kd</code> 却以为老板要求原地静止，全程像水池阻力一样拖后腿，导致关节<strong>永远慢半拍跟在目标屁股后面追</strong>！</li>
+            <li><strong>强化学习（RL）冷知识：</strong>主流人形/四足 RL 策略常故意把 <code>dq_des</code> 锁死为 <code>0</code>！神经网络发现跟慢半拍后，会自动学会<strong>把目标角度往更前方多报一点</strong>（想去 10° 故意喊 13°），借更大的弹簧力硬生生抵消阻尼拖曳。传统控制则只需把真实期望速度填进去即可丝滑零滞后。</li>
+          </ul>
+        </div>
+
+        <div class="contrast-card info">
+          <h4>在普通位置 / CSP 模式里：管家靠两招自动生成</h4>
+          <ul>
+            <li><strong>第一招：按“距离差”折算追赶速度（位置环本职工作）：</strong>就像在操场追朋友，离他还有 100 米就撒腿狂奔（大位置误差乘比例系数直接变成高目标转速）；追到只剩 1 米自然放慢脚步；追上了（位置差=0）目标转速自动归零。</li>
+            <li><strong>第二招：相邻两点偷偷做减法（内部速度前馈）：</strong>在高频 CSP 模式中，你第 1ms 发 <code>1.0°</code>、第 2ms 发 <code>1.2°</code>，驱动器自己在内部拿 <code>(1.2° - 1.0°) ÷ 1ms = 200°/s</code>，瞬间算出轨迹隐含的运动速度并直接前馈注入速度环，不用等拉开距离差才发力追赶。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-Q2 -->
+    <div class="sub-qa">
+      <div class="sub-qa-q">
+        <span class="q-badge">追问 2</span>
+        <span>如果上位机用 <code>(这次位置 - 上次位置) ÷ 时间</code> 算速度，那速度岂不是永远慢一帧？</span>
+      </div>
+
+      <p><strong>你的直觉一针见血！</strong>用后向差分 <code>(p[k] - p[k-1]) / dt</code> 算出来的其实是“上一帧到这一帧的平均速度”（严格对应半帧前的历史时刻 $t - \Delta t/2$），拿过去当现在确实存在相位滞后。真实机器人工程按<strong>“未来轨迹是否已知”</strong>分两类场景彻底破局：</p>
+
+<pre><code><span class="tok-cmt"># 场景 A1：解析轨迹规划（五次多项式 / 样条 / 正弦曲线）—— 直接求导，严格 0 帧延迟</span>
+q_des  = A * sin(omega * t)
+dq_des = A * omega * cos(omega * t)                 <span class="tok-cmt"># 同一毫秒瞬时位置与瞬时速度双胞胎同时出生</span>
+
+<span class="tok-cmt"># 场景 A2：离线点位表 [p[0], p[1], p[2]...] —— 偷看下一帧做“中心差分”，严格 0 相位滞后</span>
+dq_des[k] = (p[k+<span class="tok-num">1</span>] - p[k-<span class="tok-num">1</span>]) / (<span class="tok-num">2.0</span> * dt)         <span class="tok-cmt"># 一头拉过去、一头拽未来，正中间恰好对齐第 k 帧</span>
+
+<span class="tok-cmt"># 场景 B：完全未知未来的实时遥操作（VR 手柄 / 动捕手套）—— 二阶平滑观测器 / 卡尔曼滤波</span>
+q_smooth, dq_smooth = alpha_beta_filter(q_raw_vr, dt=<span class="tok-num">0.001</span>)  <span class="tok-cmt"># 滤除手抖噪点并同步输出平滑速度</span></code></pre>
+
+      <div class="contrast-grid">
+        <div class="contrast-card good">
+          <h4>✓ 场景 A：电脑自主规划动作（占 90%）—— 完美 0 帧延迟</h4>
+          <ul>
+            <li><strong>解析曲线直接求导：</strong>机械臂抓水杯、机器狗摆腿，底层都是数学函数 <code>p(t)</code>（如五次多项式或样条曲线）。在代码里直接写出导数公式 <code>v(t) = p'(t)</code>，同一时刻的位置与速度天生精确同步，<strong>0 帧延迟</strong>。</li>
+            <li><strong>离线点位表“偷看未来”（中心差分）：</strong>若内存里已算好整段轨迹数组，准备发第 <code>k</code> 帧时直接读取内存里的第 <code>k+1</code> 帧做中心差分 <code>(p[k+1] - p[k-1]) / 2dt</code>，完美消除半帧滞后。</li>
+          </ul>
+        </div>
+
+        <div class="contrast-card bad">
+          <h4>⚠ 场景 B：未知未来的实时遥操作 —— 真正大敌是“噪声放大 1000 倍”</h4>
+          <ul>
+            <li><strong>高频把“一帧”压扁：</strong>控制总线跑在 <code>1000 Hz（1 ms）</code>，人手挥动在 <code>0.001 秒</code>内速度根本来不及突变，慢半毫秒物理上完全无感。</li>
+            <li><strong>致命陷阱（数值微分爆炸）：</strong>若 VR 手套仅有 <code>0.01°</code> 的微小测量抖动，除以 <code>0.001s</code> 瞬间变成 <strong><code>10°/s</code> 的剧烈假速度尖峰</strong>，直接把电机震得高频啸叫发烫！</li>
+            <li><strong>标准工程解法：</strong>绝不裸用差分，而是在上位机串入<strong>二阶轨迹平滑器（Second-order Smoother / 卡尔曼滤波）</strong>，像连了一根极短的顺滑橡皮筋，滤掉高频手抖的同时实时吐出对齐的 <code>(平滑位置, 平滑速度)</code>。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 04: CIA 402 & MASTER TABLE ==================== -->
+  <section class="sec-card" id="sec-cia402">
+    <div class="sec-header amber">
+      <span class="sec-tag">Part 04 · CiA 402 总线行话与全模式选型速查</span>
+      <div class="sec-title">工业伺服与人形机器人里的 PP、CSP、CSV、CST 到底怎么区分与选型？</div>
+    </div>
+
+    <div class="tldr-callout">
+      <strong>一秒破译缩写密码：</strong>在采用 CANopen 或 EtherCAT 通信的工业机械臂与高端人形机器人中，大家统一遵守 <strong>CiA 402 国际标准</strong>。所有缩写只需看两部分：<br>
+      ① <strong>看前缀分门派（谁来动脑算加减速过程）</strong>：<code>P_</code> 开头（Profile 轮廓类）= <strong>“打出租车”</strong>（甩个终点，驱动器自己算缓起缓停）；<code>CS_</code> 开头（Cyclic Synchronous 周期同步类）= <strong>“提线木偶”</strong>（大脑每 1ms 微操喂点，驱动器绝不自作主张）。<br>
+      ② <strong>看尾字母知物理量</strong>：<code>P</code> = Position（位置），<code>V</code> = Velocity（速度），<code>T</code> = Torque（力矩）。
+    </div>
+
+    <h3><span class="step-num amber">1</span>两大门派正面交锋：打出租车（P_） vs 毫秒级提线木偶（CS_）</h3>
+    <div class="contrast-grid">
+      <div class="contrast-card amber">
+        <h4>门派 A：P_ 开头（PP / PV / PT）—— 甩手掌柜“打出租车”</h4>
+        <ul>
+          <li><strong>工作方式（以 PP 轮廓位置为例）：</strong>上位机只发一条指令：“去 <code>90°</code>，最高速 30，加减速温柔点！”发完就能去忙别的。驱动器自己在内部生成“加速 → 匀速 → 减速”梯形平滑曲线稳稳停靠。</li>
+          <li><strong>优势：</strong>上位机极省算力，对总线实时性与抖动要求很低，单轴点到点动作丝滑。</li>
+          <li><strong>致命短板：</strong><strong>无法多轴协同画轨迹！</strong>6 个关节各自算梯形加减速，1 号关节早到了、2 号还在半路，机械臂末端原本想走的直线会扭成“贪吃蛇”。</li>
+        </ul>
+      </div>
+
+      <div class="contrast-card info">
+        <h4>门派 B：CS_ 开头（CSP / CSV / CST）—— 1ms 节拍“提线木偶”</h4>
+        <ul>
+          <li><strong>工作方式（以 CSP 周期同步位置为例）：</strong>驱动器关闭内部长程轨迹规划。上位机每 <strong>1 毫秒</strong> 准时把切碎的路径喂给所有关节：“第1ms去 <code>0.01°</code>！第2ms去 <code>0.03°</code>……”（注：若慢速总线只能 10ms 发一次点，则用老前辈 <strong><code>IP 插补位置模式</code></strong> 让驱动器帮补中间 9 个点）。</li>
+          <li><strong>多轴神同步（CSP）：</strong>6 个关节听同一个 1ms 节拍器齐步走，机械臂可在空中画出完美直线、圆弧甚至写毛笔字。</li>
+          <li><strong>具身智能皇冠（CST 周期同步力矩）：</strong>上位机每 1ms 直接刷新关节目标力矩——相当于<strong>在上位机代码里自己手搓更高级的全身动力学/RL MIT 控制器</strong>，是目前高端力控臂与人形机器人的绝对主力！</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3><span class="step-num amber">2</span>全模式工程选型全景速查表</h3>
+    <div class="filter-bar" id="tableFilterBar">
+      <button class="filter-pill active" data-cat="all">全部模式 (11)</button>
+      <button class="filter-pill" data-cat="core">基础与柔顺运控 (4)</button>
+      <button class="filter-pill" data-cat="cia402">CiA 402 总线标准族 (6)</button>
+      <button class="filter-pill" data-cat="aux">辅助与安全状态 (3)</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="masterModeTable">
+        <thead>
+          <tr>
+            <th style="width:15%">模式 / 缩写</th>
+            <th style="width:16%">中文名称</th>
+            <th style="width:14%">分类标签</th>
+            <th style="width:16%">加减速规划归属</th>
+            <th>生动直觉比喻 &amp; 典型工程场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-cat="core">
+            <td><code>Torque</code></td>
+            <td><strong>力矩 / 电流模式</strong></td>
+            <td><span class="pill-warn">基础三环 · 内环</span></td>
+            <td>无（直接输出力）</td>
+            <td><strong>闭眼定力推门</strong>：空载易飞车，遇阻恒力不撞碎；用于电动螺丝刀、恒张力收卷机。</td>
+          </tr>
+          <tr data-cat="core">
+            <td><code>Velocity</code></td>
+            <td><strong>速度模式</strong></td>
+            <td><span class="pill-ok">基础三环 · 中环</span></td>
+            <td>速度环 PI 调节</td>
+            <td><strong>汽车定速巡航</strong>：上坡自动加电流死保转速；用于传送带、激光雷达、轮式底盘、螺旋桨。</td>
+          </tr>
+          <tr data-cat="core">
+            <td><code>Position</code></td>
+            <td><strong>位置模式</strong></td>
+            <td><span class="pill-part">基础三环 · 外环</span></td>
+            <td>位置环死守角度</td>
+            <td><strong>站军姿士兵</strong>：偏离一度就拼命顶回原位；用于航模舵机、监控云台、3D 打印机喷头。</td>
+          </tr>
+          <tr class="highlight-row" data-cat="core">
+            <td><code>MIT / 阻抗</code></td>
+            <td><strong>运控 / 阻抗模式</strong></td>
+            <td><span class="pill-ok">具身机器人主力</span></td>
+            <td>五参数弹簧阻尼律</td>
+            <td><strong>有弹性的真实肌肉</strong>：<code>Kp</code> 调软硬、<code>Kd</code> 防震荡、<code>τ_ff</code> 抗重力；四足机器狗、人形步态、协作臂示教首选。</td>
+          </tr>
+          <tr data-cat="cia402">
+            <td><code>PP</code></td>
+            <td><strong>轮廓位置模式</strong></td>
+            <td><span class="pill-warn">CiA 402 · 包办派</span></td>
+            <td>电机驱动器自己算</td>
+            <td><strong>报地名打出租车</strong>：甩个终点自动梯形缓起缓停；用于单轴升降柱、工位转台、挡板推杆。</td>
+          </tr>
+          <tr class="highlight-row" data-cat="cia402">
+            <td><code>CSP</code></td>
+            <td><strong>周期同步位置</strong></td>
+            <td><span class="pill-part">CiA 402 · 微操派</span></td>
+            <td>上位机每 1ms 喂点</td>
+            <td><strong>毫秒级提线木偶</strong>：多关节严格按同一时间轴同步轨迹；用于六轴工业机械臂焊接、雕刻、写字。</td>
+          </tr>
+          <tr data-cat="cia402">
+            <td><code>PV</code></td>
+            <td><strong>轮廓速度模式</strong></td>
+            <td><span class="pill-warn">CiA 402 · 包办派</span></td>
+            <td>电机驱动器斜坡提速</td>
+            <td><strong>平缓提速巡航</strong>：设好目标转速后驱动器按加速度平顺拉升，避免启动猛蹿。</td>
+          </tr>
+          <tr data-cat="cia402">
+            <td><code>CSV</code></td>
+            <td><strong>周期同步速度</strong></td>
+            <td><span class="pill-part">CiA 402 · 微操派</span></td>
+            <td>上位机每 1ms 喂速度</td>
+            <td><strong>实时微操踩油门</strong>：每毫秒刷新车轮转速；用于全向麦克纳姆轮 AGV 底盘高速平滑拐弯。</td>
+          </tr>
+          <tr data-cat="cia402">
+            <td><code>PT</code></td>
+            <td><strong>轮廓力矩模式</strong></td>
+            <td><span class="pill-warn">CiA 402 · 包办派</span></td>
+            <td>电机驱动器斜坡加力</td>
+            <td><strong>温柔渐进加劲</strong>：按设定斜率缓慢加大输出力矩；用于精密压装机平稳施压。</td>
+          </tr>
+          <tr class="highlight-row" data-cat="cia402">
+            <td><code>CST</code></td>
+            <td><strong>周期同步力矩</strong></td>
+            <td><span class="pill-ok">CiA 402 · 皇冠力控</span></td>
+            <td>上位机每 1ms 算力矩</td>
+            <td><strong>顶尖高手直控肌纤维</strong>：上位机跑动力学 WBC 或 RL 神经网络，每 1ms 直发力矩；高端人形与力控打磨核心模式。</td>
+          </tr>
+          <tr data-cat="cia402 aux">
+            <td><code>IP / HM</code></td>
+            <td><strong>插补位置 / 回零</strong></td>
+            <td><span class="pill-part">CiA 402 · 辅助族</span></td>
+            <td>驱动器内插 / 自动寻零</td>
+            <td><strong>省流量补帧（IP）</strong>：10ms 发一点由驱动器补齐 1ms 碎步；<strong>摸黑找墙角（HM）</strong>：上电碰限位开关标定 <code>0°</code>。</td>
+          </tr>
+          <tr data-cat="aux">
+            <td><code>Damping / Idle</code></td>
+            <td><strong>阻尼刹车 / 自由失能</strong></td>
+            <td><span class="pill-warn">安全保护状态</span></td>
+            <td>反电动势制动 / 断电</td>
+            <td><strong>水里挥拳（阻尼）</strong>：急停防机械臂砸桌；<strong>彻底躺平（失能）</strong>：断电零阻力自由掰动。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn-note">
+      <strong>实战选型一句话备忘：</strong>单轴简单定位选 <code>PP</code>；多轴严丝合缝走几何轨迹选 <code>CSP</code>；需要抗冲击缓冲、人机安全接触或跑强化学习全身运动控制，优先选关节原生 <code>MIT 模式</code> 或在 EtherCAT 高速总线上用 <code>CST 周期同步力矩模式</code> 自行实现阻抗控制律。
+    </div>
+  </section>
+
+  <footer>
+    <a href="../index.html">← 返回博客首页</a> · 电机控制模式深度全解 · Reading Notes 硬件与电驱系列
+  </footer>
+
+</main>
+
+<script>
+(function() {
+  const motorCanvas = document.getElementById('motorCanvas');
+  const mCtx = motorCanvas.getContext('2d');
+  const waveCanvas = document.getElementById('waveCanvas');
+  const wCtx = waveCanvas.getContext('2d');
+
+  // High-DPI Crisp Scaling
+  function setupHiDPI(canvas, ctx, cssW, cssH) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = cssW * dpr;
+    canvas.height = cssH * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: cssW, h: cssH };
+  }
+  const mDim = setupHiDPI(motorCanvas, mCtx, 340, 220);
+  const wDim = setupHiDPI(waveCanvas, wCtx, 440, 92);
+
+  let mode = 'mit';
+  let angle = 90;       // deg (0 = top, clockwise)
+  let vel = 0;          // deg/s
+  let torque = 0;       // N.m
+  let target = 90;      // deg or rpm or torque*10
+  let kp = 30;
+  let kd = 10;
+  let ff = 0;           // N.m
+  let load = 0;         // N.m opposing load
+  let pushing = false;
+  let velIntegral = 0;
+
+  // 6-second rolling waveform history (~360 samples at 60fps)
+  const MAX_HIST = 320;
+  const histActual = [];
+  const histTarget = [];
+
+  const hints = {
+    mit: '<strong>MIT 阻抗模式：</strong>像装了虚拟弹簧与液压减震器，按住下方按钮猛推连杆会温柔让步，松手后平顺回弹且无超调震荡。',
+    pos: '<strong>位置模式（高刚性死守）：</strong>如同站军姿士兵！外力推它时电流瞬间拉满死顶，松手猛烈弹回目标角度。',
+    vel: '<strong>速度模式（定速巡航）：</strong>内部速度 PI 环发威！拖动“持续反向负载”滑块可见输出力矩自动飙升，死保转速不掉。',
+    trq: '<strong>力矩模式（恒力输出）：</strong>只管输出恒定力矩！负载为 0 时越转越快（空载飞车）；负载超过设定力矩时被憋停甚至倒转。',
+    damp: '<strong>阻尼模式（水中挥拳）：</strong>不主动去任何角度，但产生与转速成正比的反向液压阻力，猛推阻力极大、慢推可柔和挪动。',
+    free: '<strong>失能自由模式（断电躺平）：</strong>功率管完全关断，输出力矩恒为 0 N·m，外力轻轻一推便顺着惯性自由滑行。'
+  };
+
+  const modeButtons = document.querySelectorAll('.mode-pill');
+  const presetButtons = document.querySelectorAll('.preset-btn');
+  const rngTarget = document.getElementById('rngTarget');
+  const lblTarget = document.getElementById('lblTarget');
+  const valTargetDisp = document.getElementById('valTargetDisp');
+  const ctrlTargetRow = document.getElementById('ctrlTargetRow');
+  const ctrlMitRow = document.getElementById('ctrlMitRow');
+  const rngKp = document.getElementById('rngKp');
+  const rngKd = document.getElementById('rngKd');
+  const rngFf = document.getElementById('rngFf');
+  const valKpDisp = document.getElementById('valKpDisp');
+  const valKdDisp = document.getElementById('valKdDisp');
+  const valFfDisp = document.getElementById('valFfDisp');
+  const rngLoad = document.getElementById('rngLoad');
+  const valLoadDisp = document.getElementById('valLoadDisp');
+  const btnPush = document.getElementById('btnPush');
+  const simHint = document.getElementById('simHint');
+  const trqBarFill = document.getElementById('trqBarFill');
+  const valTrqStatus = document.getElementById('valTrqStatus');
+
+  function formatKpLabel(v) {
+    const tag = v < 18 ? '很软·橡皮筋' : v < 55 ? '中等弹性' : '高刚性';
+    return v + '（' + tag + '）';
+  }
+  function formatKdLabel(v) {
+    const tag = v < 4 ? '极小·易震荡' : v < 16 ? '临界适中' : '强阻尼粘滞';
+    return v + '（' + tag + '）';
+  }
+
+  function syncUIForMode(keepParams) {
+    modeButtons.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    simHint.innerHTML = hints[mode];
+    ctrlMitRow.style.display = (mode === 'mit') ? 'block' : 'none';
+
+    if (mode === 'mit' || mode === 'pos') {
+      ctrlTargetRow.style.display = 'block';
+      lblTarget.textContent = '目标角度 q_des';
+      rngTarget.min = 0; rngTarget.max = 359;
+      if (!keepParams) { target = 90; rngTarget.value = 90; }
+      valTargetDisp.textContent = target + '°';
+    } else if (mode === 'vel') {
+      ctrlTargetRow.style.display = 'block';
+      lblTarget.textContent = '目标转速 v_des';
+      rngTarget.min = 20; rngTarget.max = 180;
+      if (!keepParams) { target = 80; rngTarget.value = 80; }
+      valTargetDisp.textContent = target + ' rpm';
+    } else if (mode === 'trq') {
+      ctrlTargetRow.style.display = 'block';
+      lblTarget.textContent = '设定恒定力矩 τ_des';
+      rngTarget.min = 5; rngTarget.max = 55;
+      if (!keepParams) { target = 22; rngTarget.value = 22; }
+      valTargetDisp.textContent = (target / 10).toFixed(1) + ' N·m';
+    } else {
+      ctrlTargetRow.style.display = 'none';
+    }
+  }
+
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      mode = btn.dataset.mode;
+      vel = 0;
+      velIntegral = 0;
+      syncUIForMode(false);
+    });
+  });
+
+  // Scenario Presets
+  presetButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      vel = 0;
+      velIntegral = 0;
+      histActual.length = 0;
+      histTarget.length = 0;
+
+      if (p === 'soft-spring') {
+        mode = 'mit';
+        angle = 25; target = 90; rngTarget.value = 90;
+        kp = 10; rngKp.value = 10; valKpDisp.textContent = formatKpLabel(kp);
+        kd = 9;  rngKd.value = 9;  valKdDisp.textContent = formatKdLabel(kd);
+        ff = 0;  rngFf.value = 0;  valFfDisp.textContent = '0.0 N·m';
+        load = 0; rngLoad.value = 0; valLoadDisp.textContent = '0.0 N·m';
+        syncUIForMode(true);
+      } else if (p === 'underdamped') {
+        mode = 'mit';
+        angle = 20; target = 110; rngTarget.value = 110;
+        kp = 72; rngKp.value = 72; valKpDisp.textContent = formatKpLabel(kp);
+        kd = 1;  rngKd.value = 1;  valKdDisp.textContent = formatKdLabel(kd);
+        ff = 0;  rngFf.value = 0;  valFfDisp.textContent = '0.0 N·m';
+        load = 0; rngLoad.value = 0; valLoadDisp.textContent = '0.0 N·m';
+        syncUIForMode(true);
+        simHint.innerHTML = '<strong>低阻尼欠阻尼震荡：</strong>弹簧刚度 Kp 很大但阻尼 Kd 极小，连杆冲过目标点来回剧烈震荡！试着调大 Kd 观察波形迅速平息。';
+      } else if (p === 'gravity-ff') {
+        mode = 'mit';
+        angle = 90; target = 90; rngTarget.value = 90;
+        kp = 24; rngKp.value = 24; valKpDisp.textContent = formatKpLabel(kp);
+        kd = 10; rngKd.value = 10; valKdDisp.textContent = formatKdLabel(kd);
+        load = 3.2; rngLoad.value = 32; valLoadDisp.textContent = '3.2 N·m';
+        ff = 0; rngFf.value = 0; valFfDisp.textContent = '0.0 N·m';
+        syncUIForMode(true);
+        simHint.innerHTML = '<strong>带载稳态下垂：</strong>挂上 3.2 N·m 重物且前馈为 0 时，纯弹簧必须下垂偏离约 30° 才能憋出足够力气托住重物！试着把“前馈补偿 τ_ff”调到 +3.2 N·m 消除误差。';
+      } else if (p === 'vel-load') {
+        mode = 'vel';
+        target = 90; rngTarget.value = 90;
+        load = 3.8; rngLoad.value = 38; valLoadDisp.textContent = '3.8 N·m';
+        syncUIForMode(true);
+      } else if (p === 'trq-runaway') {
+        mode = 'trq';
+        target = 25; rngTarget.value = 25;
+        load = 0; rngLoad.value = 0; valLoadDisp.textContent = '0.0 N·m';
+        syncUIForMode(true);
+      }
+    });
+  });
+
+  rngTarget.addEventListener('input', () => {
+    target = Number(rngTarget.value);
+    if (mode === 'mit' || mode === 'pos') valTargetDisp.textContent = target + '°';
+    else if (mode === 'vel') valTargetDisp.textContent = target + ' rpm';
+    else if (mode === 'trq') valTargetDisp.textContent = (target / 10).toFixed(1) + ' N·m';
+  });
+
+  rngKp.addEventListener('input', () => {
+    kp = Number(rngKp.value);
+    valKpDisp.textContent = formatKpLabel(kp);
+  });
+
+  rngKd.addEventListener('input', () => {
+    kd = Number(rngKd.value);
+    valKdDisp.textContent = formatKdLabel(kd);
+  });
+
+  rngFf.addEventListener('input', () => {
+    ff = Number(rngFf.value) / 10;
+    valFfDisp.textContent = (ff >= 0 ? '+' : '') + ff.toFixed(1) + ' N·m';
+  });
+
+  rngLoad.addEventListener('input', () => {
+    load = Number(rngLoad.value) / 10;
+    valLoadDisp.textContent = load.toFixed(1) + ' N·m';
+  });
+
+  const startPush = (e) => {
+    e.preventDefault();
+    pushing = true;
+    btnPush.classList.add('is-pushing');
+  };
+  const endPush = () => {
+    pushing = false;
+    btnPush.classList.remove('is-pushing');
+  };
+  btnPush.addEventListener('mousedown', startPush);
+  btnPush.addEventListener('touchstart', startPush, { passive: false });
+  window.addEventListener('mouseup', endPush);
+  window.addEventListener('touchend', endPush);
+
+  const MAX_TRQ = 9.5;
+  function stepPhysics(dt) {
+    const extPush = pushing ? -5.2 : 0;
+    const extLoad = -load;
+    const errAngle = ((target - angle + 540) % 360) - 180;
+
+    let rawTrq = 0;
+    if (mode === 'pos') {
+      rawTrq = errAngle * 0.48 - vel * 0.046;
+    } else if (mode === 'mit') {
+      rawTrq = errAngle * (kp * 0.0045) - vel * (kd * 0.0036) + ff;
+    } else if (mode === 'vel') {
+      const targetDegPerSec = target * 3.0;
+      const vErr = targetDegPerSec - vel;
+      velIntegral = Math.max(-7.5, Math.min(7.5, velIntegral + vErr * dt * 0.045));
+      rawTrq = vErr * 0.036 + velIntegral;
+    } else if (mode === 'trq') {
+      rawTrq = target / 10;
+    } else if (mode === 'damp') {
+      rawTrq = -vel * 0.038;
+    } else {
+      rawTrq = 0;
+    }
+
+    torque = Math.max(-MAX_TRQ, Math.min(MAX_TRQ, rawTrq));
+    const saturated = Math.abs(rawTrq) > MAX_TRQ;
+
+    const friction = -vel * 0.0032;
+    const netTorque = torque + extPush + extLoad + friction;
+    const inertia = 0.018;
+    vel = Math.max(-1350, Math.min(1350, vel + (netTorque / inertia) * dt));
+    angle = (angle + vel * dt + 3600) % 360;
+
+    // Record history
+    histActual.push(angle);
+    histTarget.push((mode === 'mit' || mode === 'pos') ? target : null);
+    if (histActual.length > MAX_HIST) {
+      histActual.shift();
+      histTarget.shift();
+    }
+
+    // Readouts
+    document.getElementById('valAngle').textContent = Math.round(angle) + '°';
+    document.getElementById('valVel').textContent = Math.round(vel / 3) + ' rpm';
+    document.getElementById('valTrq').textContent = (torque >= 0 ? '+' : '') + torque.toFixed(1) + ' N·m';
+
+    // Bidirectional torque bar
+    const pct = Math.min(50, (Math.abs(torque) / MAX_TRQ) * 50);
+    if (torque >= 0) {
+      trqBarFill.style.left = '50%';
+      trqBarFill.style.width = pct + '%';
+      trqBarFill.style.background = saturated ? '#b91c1c' : '#0071e3';
+    } else {
+      trqBarFill.style.left = (50 - pct) + '%';
+      trqBarFill.style.width = pct + '%';
+      trqBarFill.style.background = saturated ? '#b91c1c' : '#d97706';
+    }
+    valTrqStatus.textContent = saturated ? '已达峰值限幅 (±9.5 N·m)' : '线性工作区';
+    valTrqStatus.style.color = saturated ? '#b91c1c' : '#71717a';
+  }
+
+  function drawDial() {
+    mCtx.clearRect(0, 0, mDim.w, mDim.h);
+    const cx = mDim.w / 2;
+    const cy = mDim.h / 2 + 4;
+    const radius = 78;
+
+    // Outer subtle stator ring
+    mCtx.beginPath();
+    mCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+    mCtx.strokeStyle = '#e4e2dc';
+    mCtx.lineWidth = 8;
+    mCtx.stroke();
+
+    // Degree ticks & cardinal labels
+    for (let d = 0; d < 360; d += 30) {
+      const rad = (d - 90) * Math.PI / 180;
+      const inner = d % 90 === 0 ? radius - 10 : radius - 6;
+      mCtx.beginPath();
+      mCtx.moveTo(cx + Math.cos(rad) * inner, cy + Math.sin(rad) * inner);
+      mCtx.lineTo(cx + Math.cos(rad) * (radius + 5), cy + Math.sin(rad) * (radius + 5));
+      mCtx.strokeStyle = d % 90 === 0 ? '#71717a' : '#cbd5e1';
+      mCtx.lineWidth = d % 90 === 0 ? 2 : 1.2;
+      mCtx.stroke();
+    }
+
+    mCtx.font = '600 11px -apple-system, sans-serif';
+    mCtx.fillStyle = '#71717a';
+    mCtx.textAlign = 'center';
+    mCtx.fillText('0°', cx, cy - radius - 10);
+    mCtx.fillText('90°', cx + radius + 18, cy + 4);
+    mCtx.fillText('180°', cx, cy + radius + 18);
+    mCtx.fillText('270°', cx - radius - 20, cy + 4);
+
+    // Dashed Target Pointer (for Position & MIT modes)
+    if (mode === 'pos' || mode === 'mit') {
+      const tRad = (target - 90) * Math.PI / 180;
+      const tx = cx + Math.cos(tRad) * (radius + 2);
+      const ty = cy + Math.sin(tRad) * (radius + 2);
+      mCtx.save();
+      mCtx.beginPath();
+      mCtx.setLineDash([5, 4]);
+      mCtx.moveTo(cx, cy);
+      mCtx.lineTo(tx, ty);
+      mCtx.strokeStyle = '#0d9488';
+      mCtx.lineWidth = 3;
+      mCtx.stroke();
+      mCtx.restore();
+
+      mCtx.beginPath();
+      mCtx.arc(tx, ty, 5, 0, Math.PI * 2);
+      mCtx.fillStyle = '#0d9488';
+      mCtx.fill();
+    }
+
+    // Center motor housing
+    mCtx.beginPath();
+    mCtx.arc(cx, cy, 22, 0, Math.PI * 2);
+    mCtx.fillStyle = '#f1f0ec';
+    mCtx.fill();
+    mCtx.lineWidth = 2;
+    mCtx.strokeStyle = '#cbd5e1';
+    mCtx.stroke();
+
+    // Actual Rotor Arm
+    const armRad = (angle - 90) * Math.PI / 180;
+    const ax = cx + Math.cos(armRad) * (radius - 3);
+    const ay = cy + Math.sin(armRad) * (radius - 3);
+
+    mCtx.beginPath();
+    mCtx.moveTo(cx, cy);
+    mCtx.lineTo(ax, ay);
+    mCtx.strokeStyle = '#0071e3';
+    mCtx.lineWidth = 8;
+    mCtx.lineCap = 'round';
+    mCtx.stroke();
+
+    // End effector tip
+    mCtx.beginPath();
+    mCtx.arc(ax, ay, 8.5, 0, Math.PI * 2);
+    mCtx.fillStyle = pushing ? '#b91c1c' : '#0071e3';
+    mCtx.fill();
+    mCtx.lineWidth = 2;
+    mCtx.strokeStyle = '#ffffff';
+    mCtx.stroke();
+
+    // Center shaft cap
+    mCtx.beginPath();
+    mCtx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+    mCtx.fillStyle = '#18181b';
+    mCtx.fill();
+
+    if (pushing) {
+      mCtx.font = '700 12px -apple-system, sans-serif';
+      mCtx.fillStyle = '#b91c1c';
+      mCtx.textAlign = 'left';
+      mCtx.fillText('逆向外力冲击中 (-5.2 N·m)', 10, 18);
+    }
+  }
+
+  function drawWaveform() {
+    wCtx.clearRect(0, 0, wDim.w, wDim.h);
+    const padL = 34, padR = 8, padT = 14, padB = 14;
+    const plotW = wDim.w - padL - padR;
+    const plotH = wDim.h - padT - padB;
+
+    // Grid lines (0°, 180°, 360°)
+    wCtx.strokeStyle = '#e2e8f0';
+    wCtx.lineWidth = 1;
+    [0, 0.5, 1].forEach(frac => {
+      const y = padT + plotH * frac;
+      wCtx.beginPath();
+      wCtx.moveTo(padL, y);
+      wCtx.lineTo(padL + plotW, y);
+      wCtx.stroke();
+    });
+
+    wCtx.font = '600 10px ui-monospace, monospace';
+    wCtx.fillStyle = '#94a3b8';
+    wCtx.textAlign = 'right';
+    wCtx.fillText('360°', padL - 4, padT + 4);
+    wCtx.fillText('180°', padL - 4, padT + plotH * 0.5 + 3);
+    wCtx.fillText('0°', padL - 4, padT + plotH + 3);
+
+    wCtx.textAlign = 'left';
+    wCtx.fillText('最近 6s 角度跟随轨迹', padL + 4, 11);
+
+    if (histActual.length < 2) return;
+
+    // Target line
+    if (mode === 'mit' || mode === 'pos') {
+      wCtx.save();
+      wCtx.setLineDash([4, 3]);
+      wCtx.strokeStyle = '#0d9488';
+      wCtx.lineWidth = 1.6;
+      wCtx.beginPath();
+      let started = false;
+      for (let i = 0; i < histTarget.length; i++) {
+        const tv = histTarget[i];
+        if (tv === null) continue;
+        const x = padL + (i / (MAX_HIST - 1)) * plotW;
+        const y = padT + plotH * (1 - tv / 360);
+        if (!started) { wCtx.moveTo(x, y); started = true; }
+        else wCtx.lineTo(x, y);
+      }
+      wCtx.stroke();
+      wCtx.restore();
+    }
+
+    // Actual angle curve (avoid vertical wrap-around jump lines when crossing 0/360)
+    wCtx.strokeStyle = '#0071e3';
+    wCtx.lineWidth = 2;
+    wCtx.beginPath();
+    for (let i = 0; i < histActual.length; i++) {
+      const x = padL + (i / (MAX_HIST - 1)) * plotW;
+      const y = padT + plotH * (1 - histActual[i] / 360);
+      if (i === 0 || Math.abs(histActual[i] - histActual[i - 1]) > 180) {
+        wCtx.moveTo(x, y);
+      } else {
+        wCtx.lineTo(x, y);
+      }
+    }
+    wCtx.stroke();
+  }
+
+  let last = performance.now();
+  function animate(now) {
+    const dt = Math.min(0.04, (now - last) / 1000);
+    last = now;
+    stepPhysics(dt);
+    drawDial();
+    drawWaveform();
+    requestAnimationFrame(animate);
+  }
+
+  syncUIForMode(false);
+  requestAnimationFrame(animate);
+
+  // Master Table Category Filter
+  const filterBtns = document.querySelectorAll('#tableFilterBar .filter-pill');
+  const tableRows = document.querySelectorAll('#masterModeTable tbody tr');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const cat = btn.dataset.cat;
+      tableRows.forEach(row => {
+        const rowCats = (row.dataset.cat || '').split(' ');
+        row.style.display = (cat === 'all' || rowCats.includes(cat)) ? '' : 'none';
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

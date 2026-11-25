@@ -21,7 +21,7 @@
     hardware: {
       kicker: '04 · PHYSICAL',
       title: '硬件',
-      desc: '机器人本体的机械与电驱物理边界：电机扭矩放大、谐波与行星减速器结构、关节透明度、机械臂力控与柔顺控制（阻抗 / 导纳 / 力位混合）及硬件特性对 Sim2Real 的决定作用。',
+      desc: '机器人本体的机械与电驱物理边界：电机控制模式（力矩 / 速度 / 位置 / MIT / CiA 402）、谐波与行星减速器、关节透明度、机械臂力控与柔顺控制及 Sim2Real 特性。',
     },
     rl: {
       kicker: '05 · FOUNDATION',
@@ -41,6 +41,17 @@
   };
 
   const POSTS = [
+    {
+      title: '电机控制模式深度全解：从手臂直觉、三环架构到 CiA 402 与 MIT 力控',
+      moduleKey: 'hardware',
+      moduleLabel: '04 · 硬件',
+      format: '交互教程',
+      date: '2026.11.25',
+      metaNote: '实时动力学实验台 · 2 大追问 · CiA 402 速查',
+      summary:
+        '从力矩、速度、位置与 MIT 阻抗控制四大基本功讲起，拆解三环级联底层架构与单关节实时闭环仿真，解答“只发位置怎么算速度、差分慢一帧怎么破”，并一表打通 PP / CSP / CSV / CST 总线标准。',
+      href: 'posts/motor-control-modes.html',
+    },
     {
       title: '机械臂力控与柔顺控制深度全解：从刚性走正步、阻抗/导纳双生花到力位混合与拖动示教',
       moduleKey: 'hardware',

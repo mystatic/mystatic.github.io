@@ -644,12 +644,6 @@ input:focus-visible {
   border-color: var(--m4-border);
 }
 
-.badge-new--m4 {
-  background: var(--m4-soft);
-  color: var(--m4);
-  border-color: var(--m4-border);
-}
-
 .badge-new--m7 {
   background: var(--m7-soft);
   color: var(--m7);
