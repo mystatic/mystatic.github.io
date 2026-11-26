@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="深入拆解 NVIDIA GR00T 2 真机强化学习后训练：SFT 毫米级卡阻痛点、冻结底座的残差强化学习（Residual RL）、带 CPS 保系数采样与历史记忆基线的 GRPO，以及零额外损耗的 GRPO 自模仿学习，内置两个可交互物理与数学沙盘。">
+  <meta name="category" content="Product">
+  <meta property="article:section" content="Product">
+  <meta name="article-format" content="交互教程">
+  <title>GR00T 2 真机强化学习深度图解：从 SFT、残差 RL 到 GRPO 与自模仿学习｜Reading Notes</title>
+  <style>
+    :root {
+      --bg: #f9f7f2;
+      --card: #ffffff;
+      --panel: #f3f0e8;
+      --line: #e5e2d9;
+      --rule: #d5d0c5;
+      --text: #2b2b2b;
+      --muted: #666c75;
+      --head: #181818;
+      --sft: #5c5c5c;
+      --res: #3d7fc7;
+      --res-bg: rgba(61, 127, 199, 0.10);
+      --grpo: #8cc63f;
+      --grpo-ink: #4f7d0e;
+      --grpo-bg: rgba(140, 198, 63, 0.14);
+      --si: #76b900;
+      --si-ink: #3e6800;
+      --si-bg: rgba(118, 185, 0, 0.13);
+      --warn: #d97706;
+      --danger: #dc2626;
+      --radius: 14px;
+      --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: var(--font); font-size: 16px; line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--si-ink); text-decoration: underline; text-underline-offset: 3px; }
+    .topbar {
+      position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
+      padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .topbar .brand { font-weight: 700; color: var(--head); font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .topbar .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--si); display: inline-block; }
+    .topbar nav { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13.5px; }
+    .topbar nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
+    .topbar nav a:hover { color: var(--si-ink); }
+
+    .wrap { max-width: 1020px; margin: 0 auto; padding: 36px 20px 80px; }
+    .hero-card {
+      background: linear-gradient(135deg, #1b2214 0%, #14181d 100%);
+      color: #f4f6f0; border-radius: 20px; padding: 36px 34px; margin-bottom: 36px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.10);
+    }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .pill {
+      font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px;
+      background: rgba(118, 185, 0, 0.22); color: #b9ec65; letter-spacing: 0.03em;
+    }
+    .pill.blue { background: rgba(61, 127, 199, 0.25); color: #93c5fd; }
+    .hero-card h1 { margin: 0 0 12px; font-size: clamp(26px, 3.6vw, 38px); line-height: 1.25; color: #fff; }
+    .hero-card p { margin: 0; color: #cfd6c8; font-size: 16px; max-width: 840px; }
+    .note-typo {
+      margin-top: 16px; padding: 10px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.08); border-left: 3px solid var(--si);
+      font-size: 14px; color: #e6ecd9;
+    }
+
+    section { margin-top: 48px; scroll-margin-top: 72px; }
+    h2 {
+      font-size: 24px; color: var(--head); margin: 0 0 14px;
+      display: flex; align-items: center; gap: 10px; line-height: 1.3;
+    }
+    h2 .num {
+      display: inline-grid; place-items: center; width: 30px; height: 30px;
+      border-radius: 8px; background: var(--si); color: #fff; font-size: 15px; font-weight: 700; flex: none;
+    }
+    h3 { font-size: 18.5px; color: var(--head); margin: 22px 0 8px; }
+    p { margin: 0 0 14px; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.025); margin-bottom: 18px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr; gap: 18px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 760px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+      .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* 4大方法总览卡片 */
+    .m-card {
+      background: var(--card); border: 1.5px solid var(--line); border-radius: var(--radius);
+      padding: 18px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden;
+    }
+    .m-card::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 5px; background: var(--c); }
+    .m-card .tag { font-size: 12px; font-weight: 700; color: var(--c); text-transform: uppercase; letter-spacing: 0.05em; }
+    .m-card h4 { margin: 0; font-size: 17px; color: var(--head); }
+    .m-card .metaphor { font-size: 13.5px; background: var(--panel); padding: 7px 10px; border-radius: 8px; color: #333; font-weight: 500; }
+    .m-card p { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.6; }
+    .m-card .score { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 13px; display: flex; justify-content: space-between; }
+    .m-card .score b { font-size: 18px; color: var(--head); font-variant-numeric: tabular-nums; }
+
+    /* 公式详解框 */
+    .formula-box {
+      background: #fbfaf7; border: 1px solid var(--rule); border-left: 4px solid var(--c, var(--si));
+      border-radius: 10px; padding: 16px 20px; margin: 14px 0;
+    }
+    .formula-box .eq {
+      font-family: "Cambria Math", "Times New Roman", serif; font-size: 19px; color: #111;
+      text-align: center; padding: 10px 0; overflow-x: auto; letter-spacing: 0.01em;
+    }
+    .formula-box .terms {
+      display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; padding-top: 10px;
+      border-top: 1px dashed var(--line); font-size: 13.5px; color: #444;
+    }
+    @media (min-width: 680px) { .formula-box .terms { grid-template-columns: 1fr 1fr; column-gap: 18px; } }
+    .formula-box code {
+      font-family: var(--mono); background: rgba(0,0,0,0.055); padding: 1px 6px; border-radius: 4px; font-size: 13px; color: #111;
+    }
+
+    /* 交互沙盘 1：充电器插接模拟器 */
+    .sim-panel {
+      background: var(--card); border: 1.5px solid var(--rule); border-radius: 16px; overflow: hidden;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.05);
+    }
+    .sim-tabs {
+      display: flex; flex-wrap: wrap; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px; gap: 6px;
+    }
+    .sim-tab {
+      flex: 1 1 180px; appearance: none; border: 1px solid transparent; background: transparent;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer; font: 600 14px/1.3 var(--font);
+      color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 8px; transition: all .2s;
+    }
+    .sim-tab i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .sim-tab:hover { background: rgba(255,255,255,0.6); color: var(--head); }
+    .sim-tab.on { background: #fff; color: var(--head); border-color: var(--rule); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .sim-body { display: grid; grid-template-columns: 1fr; gap: 0; }
+    @media (min-width: 820px) { .sim-body { grid-template-columns: 1.35fr 1fr; } }
+    .sim-canvas-wrap { background: #14181d; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+    canvas#plugSim { width: 100%; max-width: 540px; height: auto; aspect-ratio: 540 / 340; border-radius: 10px; background: #1b2028; }
+    .sim-Side { padding: 22px; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); }
+    @media (min-width: 820px) { .sim-Side { border-top: 0; border-left: 1px solid var(--line); } }
+    .btn-run {
+      appearance: none; border: 0; background: var(--si); color: #fff; font: 700 15px/1 var(--font);
+      padding: 13px 20px; border-radius: 10px; cursor: pointer; transition: background .2s, transform .1s;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    }
+    .btn-run:hover { background: #65a000; }
+    .btn-run:active { transform: scale(0.99); }
+    .stat-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; background: var(--bg); padding: 10px; border-radius: 10px; }
+    .stat-strip div span { display: block; font-size: 11.5px; color: var(--muted); }
+    .stat-strip div b { font-size: 19px; color: var(--head); font-variant-numeric: tabular-nums; }
+
+    /* 交互沙盘 2：GRPO 优势计算器 */
+    .calc-grid { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+    @media (min-width: 780px) { .calc-grid { grid-template-columns: 1fr 1.15fr; } }
+    .rollout-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 16px; }
+    .r-btn {
+      appearance: none; border: 1.5px solid var(--rule); background: #fff; border-radius: 10px;
+      padding: 10px 6px; cursor: pointer; font: 600 13px/1.3 var(--font); text-align: center; transition: all .15s;
+    }
+    .r-btn.win { border-color: var(--si); background: var(--si-bg); color: var(--si-ink); }
+    .r-btn.lose { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+    .preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .preset-btn {
+      appearance: none; border: 1px solid var(--rule); background: var(--bg); border-radius: 999px;
+      padding: 4px 11px; font: 500 12.5px/1.3 var(--font); cursor: pointer; color: var(--text);
+    }
+    .preset-btn:hover { border-color: var(--si); color: var(--si-ink); }
+    .adv-bars { display: flex; flex-direction: column; gap: 10px; }
+    .adv-row { display: grid; grid-template-columns: 74px 1fr 78px; align-items: center; gap: 10px; font-size: 13.5px; }
+    .adv-track { height: 22px; background: var(--panel); border-radius: 6px; position: relative; overflow: hidden; }
+    .adv-track::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1.5px; background: #999; }
+    .adv-fill { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; transition: all .25s ease; }
+
+    /* CPS 4步去噪流程图 */
+    .cps-flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; overflow-x: auto; }
+    @media (max-width: 720px) { .cps-flow { grid-template-columns: 1fr 1fr; } }
+    .cps-step {
+      border: 1.5px solid var(--rule); border-radius: 12px; padding: 14px; background: #fff; position: relative;
+    }
+    .cps-step.joint { border-color: var(--si); background: rgba(118,185,0,0.04); }
+    .cps-step .k { font: 700 12px/1 var(--mono); color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .cps-step.joint .k span.b { color: var(--si-ink); background: var(--si-bg); padding: 2px 7px; border-radius: 99px; }
+    .cps-step .k span.c { color: #666; background: var(--panel); padding: 2px 7px; border-radius: 99px; }
+    .cps-lane { font-size: 12.5px; padding: 6px 8px; border-radius: 6px; margin-top: 6px; }
+    .cps-lane.vid { background: rgba(139, 92, 246, 0.10); color: #5b21b6; }
+    .cps-lane.act { background: rgba(245, 158, 11, 0.14); color: #92400e; font-weight: 600; }
+
+    /* 对比表格 */
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 680px; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--panel); color: var(--head); font-weight: 700; white-space: nowrap; }
+    tr:last-child td { border-bottom: 0; }
+    td.num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+    td.best { color: var(--si-ink); font-weight: 700; background: rgba(118,185,0,0.07); }
+
+    /* AutoRL 时间线 */
+    .timeline { position: relative; padding-left: 24px; border-left: 2px solid var(--si); display: grid; gap: 14px; margin: 16px 0; }
+    .tl-item { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+    .tl-item::before {
+      content: ""; position: absolute; left: -31px; top: 16px; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--si); border: 2px solid var(--bg);
+    }
+    .tl-item .gain { float: right; font: 700 13px/1 var(--mono); color: var(--si-ink); background: var(--si-bg); padding: 4px 8px; border-radius: 6px; }
+
+    /* 真机视频预览小卡片 */
+    .vid-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 16px; }
+    @media (min-width: 760px) { .vid-grid { grid-template-columns: repeat(3, 1fr); } }
+    .vid-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .vid-card video { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #000; }
+    .vid-card .vc-body { padding: 10px 12px; font-size: 13px; }
+    .vid-card .vc-body b { display: block; color: var(--head); font-size: 14px; margin-bottom: 4px; }
+
+    .home-back-pill {
+      display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600;
+      color: var(--head); background: var(--bg); border: 1px solid var(--rule); padding: 5px 12px;
+      border-radius: 999px; text-decoration: none; transition: all .16s ease; white-space: nowrap;
+    }
+    .home-back-pill:hover { border-color: var(--si); color: var(--si-ink); background: #fff; }
+    .home-back-pill.green { background: var(--si-bg); border-color: rgba(118, 185, 0, .4); color: var(--si-ink); }
+    .home-back-pill.green:hover { background: var(--si); color: #fff; border-color: var(--si); }
+    .bottom-nav-bar {
+      margin-top: 44px; padding: 20px 24px; border-radius: var(--radius); background: #fff;
+      border: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.025);
+    }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" style="flex-wrap:wrap;gap:10px">
+    <a class="home-back-pill" href="../index.html">← 返回博客首页</a>
+    <a class="home-back-pill green" href="nvidia-gr00t-2.html">← GR00T 2 全景主页</a>
+    <span style="display:inline-flex;align-items:center;gap:8px"><span class="dot"></span>GR00T 2 强化学习后训练 · 交互式深度教程</span>
+  </div>
+  <nav>
+    <a href="#why">为什么 SFT 不够</a>
+    <a href="#overview">四大方法全景</a>
+    <a href="#sim">交互插接模拟</a>
+    <a href="#residual">1. 残差 RL</a>
+    <a href="#grpo">2. GRPO 与记忆沙盘</a>
+    <a href="#self-imitation">3. GRPO 自模仿</a>
+    <a href="#autorl">AutoRL 演化史</a>
+    <a href="#compare">终极对比表</a>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <!-- 首屏导读 -->
+  <div class="hero-card">
+    <div class="badge-row">
+      <span class="pill">GR00T 2 白皮书第 3.3 节 &amp; 附录 F 精讲</span>
+      <span class="pill blue">含 2 个可交互物理/数学沙盘</span>
+    </div>
+    <h1>从 40% 到 96%：彻底搞懂残差强化学习、GRPO 与 GRPO 自模仿学习</h1>
+    <p>在旋紧固定管路、插网线水晶头、插双孔充电器等毫米级「富接触（Contact-rich）」任务上，为什么普通监督微调（SFT）频频卡壳？NVIDIA 如何用三条互补的强化学习路线让 20 亿参数的世界–动作模型完成自我进化？本页用最直白的比喻、可动手的模拟器和逐行拆解的公式带你一次学透。</p>
+    <div class="note-typo">
+      💡 <strong>术语小提示：</strong>您提到的 <code>GROP</code> 原文缩写是 <strong>GRPO（Group Relative Policy Optimization，群组相对策略优化）</strong>——最早由 DeepSeek 在数学推理大模型中提出，GR00T 2 团队首次将其深度改造并成功搬上了「视频–动作联合扩散模型」与真实机器人。
+    </div>
+  </div>
+
+  <!-- 第 0 节：为什么 SFT 不够 -->
+  <section id="why">
+    <h2><span class="num">0</span>先看痛点：为什么「监督微调 SFT」插充电器只有 40% 成功率？</h2>
+    <div class="card">
+      <p>在截图中，最右侧灰色柱子 <strong>监督微调（SFT）</strong> 是所有强化学习方法的<strong>共同起跑线</strong>（固定管路 <code>66%</code>、网线插接 <code>76%</code>、充电器插接仅 <code>40%</code>，白皮书里还有一项手指插孔 <code>58%</code>）。为什么人类明明演示了几十上百次正确插法，SFT 还是经常失败？</p>
+      <div class="grid-2" style="margin-top:12px">
+        <div style="background:var(--bg);padding:16px;border-radius:10px;border-left:3px solid var(--sft)">
+          <strong style="color:var(--head)">痛点 1：没见过「失误边缘」怎么救场（复合误差）</strong>
+          <p style="font-size:14px;margin:6px 0 0;color:var(--muted)">人类遥操作数据里几乎全是顺利对准插进去的轨迹。真机执行时只要受光照或机械回差影响偏了 <strong>1 毫米</strong>，插头顶在插座塑料边缘上——SFT 从没在训练数据里见过“顶住卡死”的状态，只能原地死顶直到超时。</p>
+        </div>
+        <div style="background:var(--bg);padding:16px;border-radius:10px;border-left:3px solid var(--danger)">
+          <strong style="color:var(--head)">痛点 2：SFT 没有「成败」概念（1 毫米之差 = 天壤之别）</strong>
+          <p style="font-size:14px;margin:6px 0 0;color:var(--muted)">SFT 的损失函数只是对比动作数值差。在数学上，“对准插孔”和“偏了 1.2 毫米戳在插座外壳上”的动作误差极小；但在物理世界里，前者是 <strong>100% 通电成功</strong>，后者是 <strong>0% 彻底失败</strong>。只有强化学习的<strong>成败奖励信号（0 或 1）</strong>能教会模型跨过这最后 1 毫米！</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 第 1 节：四大方法一图总览 -->
+  <section id="overview">
+    <h2><span class="num">1</span>四大方法全景对比：两条截然不同的进化哲学</h2>
+    <p>所有方法都从<strong>同一个 SFT 模型权重</strong>出发，随后分成了两大流派：<strong>「冻结大模型 + 外挂小助手纠偏（残差 RL）」</strong> 与 <strong>「直接进化大模型本体（GRPO → GRPO 自模仿）」</strong>。</p>
+
+    <div class="grid-4">
+      <div class="m-card" style="--c: var(--sft)">
+        <span class="tag">基线起点 · SFT</span>
+        <h4>监督微调</h4>
+        <div class="metaphor">📖 照本宣科的学生：只背过标准答案，考场一偏题就懵</div>
+        <p>纯粹模仿人类演示的视频与动作去噪轨迹，没有真机试错反馈，遇毫米级卡阻无法自救。</p>
+        <div class="score"><span>充电器成功率</span><b>40%</b></div>
+      </div>
+
+      <div class="m-card" style="--c: var(--res)">
+        <span class="tag">路线 A · 外挂纠偏</span>
+        <h4>残差强化学习</h4>
+        <div class="metaphor">🧭 老师傅掌大舵 + 副驾微调方向盘</div>
+        <p><strong>完全冻结 GR00T 2 不动</strong>，外挂一个超轻量 SAC 小网络，只在插接阶段给末端叠加毫米级修正偏移。</p>
+        <div class="score"><span>充电器成功率</span><b style="color:var(--res)">70%</b></div>
+      </div>
+
+      <div class="m-card" style="--c: var(--grpo)">
+        <span class="tag">路线 B1 · 在线试错</span>
+        <h4>GRPO</h4>
+        <div class="metaphor">🎯 同题刷 6 遍，废除裁判，靠「同行衬托」进化</div>
+        <p>直接更新 GR00T 2！注入 CPS 动作探索噪声，同一场景试多次，高于组内及历史均分的动作被强化。</p>
+        <div class="score"><span>充电器成功率</span><b style="color:var(--grpo-ink)">94%</b></div>
+      </div>
+
+      <div class="m-card" style="--c: var(--si)">
+        <span class="tag">路线 B2 · 提纯沉淀</span>
+        <h4>GRPO 自模仿学习</h4>
+        <div class="metaphor">🏆 把探险踩通的满分路线，编成新教材重学一遍</div>
+        <p><strong>零额外真机采集！</strong>挑出 GRPO 探索出的成功轨迹，回到 SFT 起点用最稳的「视频+动作联合监督」重训一轮。</p>
+        <div class="score"><span>充电器成功率</span><b style="color:var(--si-ink)">96%</b></div>
+      </div>
+    </div>
+
+    <!-- 真机实拍视频对照 -->
+    <div class="vid-grid">
+      <div class="vid-card">
+        <video src="https://research.nvidia.com/labs/gear/gr00t-2/assets/video/rl_screw_pipe_v10.mp4" poster="https://research.nvidia.com/labs/gear/gr00t-2/assets/poster/rl_screw_pipe_v10.jpg" muted loop playsinline controls preload="metadata"></video>
+        <div class="vc-body"><b>任务 1：固定管路接头旋紧</b>SFT 66% → 残差 RL 76% → GRPO 86% → <b>自模仿 88%</b></div>
+      </div>
+      <div class="vid-card">
+        <video src="https://research.nvidia.com/labs/gear/gr00t-2/assets/video/rl_cable.mp4" poster="https://research.nvidia.com/labs/gear/gr00t-2/assets/poster/rl_cable.jpg" muted loop playsinline controls preload="metadata"></video>
+        <div class="vc-body"><b>任务 2：以太网线水晶头插接</b>SFT 76% → 残差 RL 82% → GRPO 92% → <b>自模仿 94%</b></div>
+      </div>
+      <div class="vid-card">
+        <video src="https://research.nvidia.com/labs/gear/gr00t-2/assets/video/rl_charger.mp4" poster="https://research.nvidia.com/labs/gear/gr00t-2/assets/poster/rl_charger.jpg" muted loop playsinline controls preload="metadata"></video>
+        <div class="vc-body"><b>任务 3：双孔充电器精准插入</b>SFT 40% → 残差 RL 70% → GRPO 94% → <b>自模仿 96%</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 交互沙盘 1：可视化充电器插接模拟器 -->
+  <section id="sim">
+    <h2><span class="num">2</span>动手体验：四种策略「插充电器」物理过程可视化模拟</h2>
+    <p>点击下方四个选项卡并按 <strong>「▶ 模拟执行一批插接」</strong>，直观观察四种算法在面对<strong>初始对准偏差与插座边缘碰撞</strong>时的真实行为差异：</p>
+
+    <div class="sim-panel">
+      <div class="sim-tabs" id="simTabs">
+        <button type="button" class="sim-tab on" data-mode="sft"><i style="background:var(--sft)"></i>1. 监督微调 (SFT)</button>
+        <button type="button" class="sim-tab" data-mode="res"><i style="background:var(--res)"></i>2. 残差强化学习 (Residual RL)</button>
+        <button type="button" class="sim-tab" data-mode="grpo"><i style="background:var(--grpo)"></i>3. GRPO 群组探索</button>
+        <button type="button" class="sim-tab" data-mode="si"><i style="background:var(--si)"></i>4. GRPO 自模仿学习</button>
+      </div>
+      <div class="sim-body">
+        <div class="sim-canvas-wrap">
+          <canvas id="plugSim" width="540" height="340"></canvas>
+        </div>
+        <div class="sim-Side">
+          <div>
+            <h3 id="simTitle" style="margin-top:0">1. 监督微调 (SFT)</h3>
+            <p id="simDesc" style="font-size:14px;color:var(--muted)"></p>
+            <div id="simKeyPoint" style="font-size:13px;background:var(--panel);padding:10px 12px;border-radius:8px;color:#333"></div>
+          </div>
+          <div>
+            <div class="stat-strip" style="margin-bottom:12px">
+              <div><span>论文真机成功率</span><b id="paperSR">40%</b></div>
+              <div><span>本轮模拟成功</span><b id="simHit">0 / 0</b></div>
+              <div><span>更新哪些参数</span><b id="simParam" style="font-size:13.5px">—</b></div>
+            </div>
+            <button type="button" class="btn-run" id="runSimBtn">▶ 模拟执行一批插接 (8 条轨迹)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 第 3 节：深度拆解残差强化学习 -->
+  <section id="residual">
+    <h2><span class="num">3</span>精讲一：残差强化学习（Residual RL）——不动大模型的「微操外挂」</h2>
+    <div class="card">
+      <p><strong>核心动机（白皮书附录 F.1.2）：</strong>GR00T 2 预训练了 40 多万小时视频，具备极强的通用视觉理解力。如果我们担心直接改大模型参数会把它原本会的技能“训坏（灾难性遗忘）”，能不能<strong>把 GR00T 2 彻底冻住（Frozen）</strong>，只在最需要精度的插接阶段，外挂一个小巧的神经网络专门做“毫米级微调纠偏”？这就是<strong>残差强化学习（Residual RL）</strong>。</p>
+
+      <h3>① 它是怎么接在 GR00T 2 后面的？</h3>
+      <p>在每个控制步 $j$，系统先让冻结的 GR00T 2 正常预测出末端目标位姿 $x^{\text{GR00T 2}}_j$；与此同时，一个轻量级的<strong>高斯残差策略小网络 $\pi_\varphi$</strong> 读取「当前相机图像 + 本体关节角 + GR00T 2 预测的末端目标 + 当前已累积偏移量 $o_j$」，输出一个微小的修正动作 $a_j \in [-1, 1]$：</p>
+
+      <div class="formula-box" style="--c: var(--res)">
+        <div class="eq">
+          o<sub>j+1</sub> = clip( o<sub>j</sub> + &gamma; &middot; &delta; &middot; a<sub>j</sub> , &minus;B , +B ) , &emsp;&emsp;
+          x<sup>cmd</sup><sub>j</sub> = x<sup>GR00T 2</sup><sub>j</sub> &oplus; o<sub>j</sub>
+        </div>
+        <div class="terms">
+          <div><code>x<sup>GR00T 2</sup><sub>j</sub></code>：冻结底座 GR00T 2 给出的粗略末端目标</div>
+          <div><code>a<sub>j</sub></code>：残差小网络实时输出的微调增量指令</div>
+          <div><code>clip(..., -B, +B)</code>：<strong>安全硬限幅</strong>，保证小助手最多只能在底座周围偏移几毫米，绝不会乱挥机械臂</div>
+          <div><code>&oplus; o<sub>j</sub></code>：将累积偏移量叠加到底座目标上，作为最终发给机械臂的指令 <code>x<sup>cmd</sup><sub>j</sub></code></div>
+        </div>
+      </div>
+
+      <h3>② 小网络怎么训练？（HIL-SERL + SAC 算法）</h3>
+      <p>残差小网络不需要扩散去噪，它只是一个普通的轻量级 MLP/视觉网络，因此可以直接使用经典的 <strong>Soft Actor-Critic (SAC)</strong> 离线+在线强化学习算法（训练时每个 Batch 一半抽历史演示数据，一半抽真机在线试错数据，甚至支持人类在机械臂卡住时顺手推一把提供纠偏示范）。它的损失函数包含三股力量：</p>
+      <ul>
+        <li><strong>Critic 价值最大化（$-\lambda_Q \bar{Q}_\psi(z, \tilde{a})$）</strong>：往评分裁判认为能成功插进去的方向微调；</li>
+        <li><strong>零残差惩罚项（$+\lambda_0 \|\mu_\varphi(z)\|^2$）——“没事别瞎改！”</strong>：只要原版 GR00T 2 走得没问题，强迫小网络输出 0，保持底座原汁原味；</li>
+        <li><strong>成功经验克隆（$+\lambda_{\text{bc}} \|\mu_\varphi(z) - a\|^2$）</strong>：一旦试出成功插进去的好偏移，立刻用监督损失把它牢牢记住。</li>
+      </ul>
+
+      <p style="margin-bottom:0"><strong>⚖️ 为什么残差 RL 充电器只到 70%，不如 GRPO 的 94%？</strong><br>
+      因为底座 GR00T 2 被彻底冻死了！如果底座本身的视觉判断偏得超过了限幅盒 $[-B, B]$，或者底座的接近角度、发力节奏本身不合理，外挂小助手权力有限，救不回来。要想突破 90%+，必须让 GR00T 2 自己亲自进化——这就引出了 <strong>GRPO</strong>。</p>
+    </div>
+  </section>
+
+  <!-- 第 4 节：深度拆解 GRPO -->
+  <section id="grpo">
+    <h2><span class="num">4</span>精讲二：GRPO —— 让扩散世界模型亲自试错进化的三大神来之笔</h2>
+    <div class="card">
+      <h3>① 先用一句话讲透：什么是 GRPO？为什么不要 Critic 裁判？</h3>
+      <p>传统强化学习（如 PPO）除了训练演员（Actor，即策略模型），还得训练一个同样庞大的评论家（Critic 价值网络）给每一步打分。但 NVIDIA 在白皮书第 89 页实测发现：<strong>在复杂机器人操作上，Critic 预测的分数几乎全是噪声（解释方差接近 0）</strong>，不仅占双倍显存，还会把预训练好的大模型带崩！</p>
+      <p><strong>GRPO（群组相对策略优化）的破局思路：废除 Critic 裁判，改用「同考卷组内同行衬托」！</strong><br>
+      面对同一个初始桌面布局 $g$（称为一个 Context），让机器人连续尝试 $N_g$ 次，每次结束只看最终有没有插进去（成功得 $R=1$ 分，失败得 $R=0$ 分）。哪次尝试比同组其他尝试的平均分高，优势 $A > 0$，就增加那次动作的概率；比平均分低，优势 $A < 0$，就降低概率！</p>
+
+      <h3>② 难题一：GR00T 2 是确定性去噪模型，怎么探索、怎么算动作概率？（CPS 保系数采样）</h3>
+      <p>大语言模型输出每个词都有现成的 Softmax 概率；但 GR00T 2 是通过 <strong>4 步流匹配去噪（Flow Matching Denoising）</strong>把纯噪声变成连续动作块的，默认推理是确定性的 Euler 积分——既不会随机探索，也算不出概率密度 $\log \pi_\theta(a|s)$！</p>
+      <p>为此，GR00T 2 引入了 <strong>CPS（Coefficients-Preserving Sampling，保系数采样）</strong>：</p>
+
+      <div class="cps-flow">
+        <div class="cps-step joint">
+          <div class="k"><span>Step k = 0</span><span class="b">联合去噪 + 算梯度</span></div>
+          <div class="cps-lane vid">🎥 视频去噪：100% 确定性（不加噪）</div>
+          <div class="cps-lane act">🦾 动作去噪：注入高斯噪声 &xi;<sub>t,0</sub></div>
+        </div>
+        <div class="cps-step">
+          <div class="k"><span>Step k = 1</span><span class="c">复用 KV 缓存</span></div>
+          <div class="cps-lane vid" style="opacity:.55">🎥 视频：直接复用 k=0 的 KV</div>
+          <div class="cps-lane act">🦾 动作去噪：注入高斯噪声 &xi;<sub>t,1</sub></div>
+        </div>
+        <div class="cps-step joint">
+          <div class="k"><span>Step k = 2</span><span class="b">联合去噪 + 算梯度</span></div>
+          <div class="cps-lane vid">🎥 视频去噪：100% 确定性（不加噪）</div>
+          <div class="cps-lane act">🦾 动作去噪：注入高斯噪声 &xi;<sub>t,2</sub></div>
+        </div>
+        <div class="cps-step">
+          <div class="k"><span>Step k = 3</span><span class="c">复用 KV 缓存</span></div>
+          <div class="cps-lane vid" style="opacity:.55">🎥 视频：直接复用 k=2 的 KV</div>
+          <div class="cps-lane act">🦾 动作去噪：输出前 H<sub>e</sub> 步执行动作</div>
+        </div>
+      </div>
+
+      <p style="font-size:14.5px;color:var(--muted)"><strong>精妙之处：</strong>噪声<strong>只加在真正执行的动作维度上</strong>，而<strong>未来视频去噪保持完全确定性</strong>——也就是说，机器人脑海里想象的未来目标画面清清楚楚、毫不晃动，只是手头执行动作时在目标周围做小幅高斯探索！同时，每一步去噪转移都变成了标准高斯分布 $\mathcal{N}(\mu_{\theta,t,k}, s_k^2 I)$，从而能精确算出新旧策略的概率比 $r_{g,i,t,k} = \exp(\ell_\theta - \ell_{\text{old}})$，放进 PPO/GRPO 的裁剪目标函数中更新参数！</p>
+
+      <h3>③ 难题二（互动沙盘）：如果一组尝试「全败（全 0）」或「全胜（全 1）」，标准 GRPO 梯度归零怎么办？</h3>
+      <p>这是白皮书第 85、89 页最惊艳的创新！在普通 GRPO 中，如果某个插座位置很难，机器人试了 4 次全败（`0, 0, 0, 0`），或者以前本来会做（历史成功率 80%）、某次更新后退化成了全败（`0, 0, 0, 0`），组内平均分是 0，自己的得分也是 0，算出来优势 $A = 0 - 0 = 0$——<strong>完全没有梯度信号！</strong></p>
+      <p>GR00T 2 为每个场景 $g$ 建立了一张<strong>持久化历史记忆表（记录过去的滑动平均成功率 $m_g$，充当 $h=2$ 次虚拟历史尝试）</strong>：</p>
+
+      <div class="formula-box" style="--c: var(--grpo)">
+        <div class="eq">
+          b<sub>g,i</sub> = <span style="display:inline-block;vertical-align:middle;text-align:center"><span style="display:block;border-bottom:1.5px solid #222;padding:0 6px">h &middot; m<sub>g</sub> + &sum;<sub>j &ne; i</sub> R<sub>g,j</sub></span><span style="display:block;padding:0 6px">h + N<sub>g</sub> &minus; 1</span></span>
+          , &emsp;&emsp; A<sub>g,i</sub> = R<sub>g,i</sub> &minus; b<sub>g,i</sub>
+        </div>
+        <div class="terms">
+          <div><code>R<sub>g,i</sub> &isin; {0, 1}</code>：当前第 $i$ 次真机尝试的成败得分</div>
+          <div><code>&sum;<sub>j &ne; i</sub> R<sub>g,j</sub></code>：同组其余 $N_g - 1$ 次尝试的得分之和（留一法）</div>
+          <div><code>m<sub>g</sub></code>：该场景过去几轮的<strong>历史平均成功率</strong>（EMA 更新）</div>
+          <div><code>h = 2</code>：历史记忆的等效权重（相当于掺入 2 次历史水平的表现做参照）</div>
+        </div>
+      </div>
+
+      <!-- 交互沙盘 2：GRPO 优势计算器 -->
+      <div class="card" style="background:#fbfaf7;border-color:var(--rule);margin-top:18px;margin-bottom:0">
+        <div style="font-weight:700;color:var(--head);margin-bottom:8px">🧮 亲手算一算：点击切换 4 次尝试的成败，对比「普通 GRPO」与「GR00T 2 记忆基线 GRPO」</div>
+        <div class="preset-row">
+          <button type="button" class="preset-btn" data-p="deg">🔥 典型痛点：以前成功率 80%，本轮突然 4 次全败 (退化警报)</button>
+          <button type="button" class="preset-btn" data-p="brk">🎉 典型痛点：以前成功率 10% 的死角，本轮突然 4 次全胜 (突破奖励)</button>
+          <button type="button" class="preset-btn" data-p="mix">⚖️ 常规情况：2 胜 2 负，历史成功率 50%</button>
+        </div>
+
+        <div class="calc-grid">
+          <div>
+            <div style="font-size:13px;color:var(--muted)">点击下方按钮切换本轮 $N_g = 4$ 次真机尝试结果：</div>
+            <div class="rollout-btns" id="rBtns">
+              <button type="button" class="r-btn win" data-i="0">尝试 #1<br><b>R = 1 (成功)</b></button>
+              <button type="button" class="r-btn win" data-i="1">尝试 #2<br><b>R = 1 (成功)</b></button>
+              <button type="button" class="r-btn lose" data-i="2">尝试 #3<br><b>R = 0 (失败)</b></button>
+              <button type="button" class="r-btn lose" data-i="3">尝试 #4<br><b>R = 0 (失败)</b></button>
+            </div>
+            <label style="display:block;font-size:13.5px;margin-bottom:10px">
+              该场景历史平均成功率 <code>m<sub>g</sub></code>：<b id="mgVal">50%</b>
+              <input type="range" id="mgSlider" min="0" max="100" value="50" style="width:100%;accent-color:var(--si)">
+            </label>
+            <div style="display:flex;gap:14px;font-size:13.5px">
+              <label style="cursor:pointer"><input type="radio" name="hmode" value="2" checked> <strong>GR00T 2 记忆基线 (h = 2)</strong></label>
+              <label style="cursor:pointer"><input type="radio" name="hmode" value="0"> 普通无记忆 GRPO/RLOO (h = 0)</label>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:13px;color:var(--muted);margin-bottom:8px">各次尝试获得的优势梯度信号 <code>A<sub>g,i</sub></code>（左负惩罚 / 右正奖励）：</div>
+            <div class="adv-bars" id="advBars"></div>
+            <div id="calcInsight" style="margin-top:12px;font-size:13px;padding:9px 12px;border-radius:8px;background:#fff;border:1px solid var(--line)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 第 5 节：深度拆解 GRPO 自模仿学习 -->
+  <section id="self-imitation">
+    <h2><span class="num">5</span>精讲三：GRPO 自模仿学习（GRPO-induced Self-Imitation）—— 为什么它能拿全场最高分？</h2>
+    <div class="card">
+      <p>看您的截图会发现一个非常有趣的现象：在每一项任务上，深绿色的 <strong>GRPO 自模仿学习</strong> 都稳压浅绿色的 <strong>GRPO</strong> 一头（固定管路 <code>86% → 88%</code>，网线 <code>92% → 94%</code>，充电器 <code>94% → 96%</code>；而在白皮书未放上网页的第四项任务「手指插孔 Finger Placement」中，更是从 GRPO 的 <code>72%</code> 暴涨到了惊人的 <strong><code>98%</code></strong>！）。</p>
+
+      <h3>① 既然 GRPO 已经很强了，纯 GRPO 还缺什么？</h3>
+      <ul>
+        <li><strong>策略梯度天生带噪</strong>：GRPO 训练过程中为了探索必须不断加 CPS 噪声，且用正负优势信号做裁剪策略梯度（Policy Gradient）推拉参数，优化方差远大于普通监督学习。</li>
+        <li><strong>视频预测分支没被同步监督更新</strong>：在 GRPO 更新时，梯度只从动作去噪的对数似然（$k=0,2$）反传，<strong>并没有用真机实际发生的未来视频画面去训练视频预测损失 $\mathcal{L}_{\text{video}}$</strong>，长期推拉容易让「视频想象」与「动作输出」之间产生轻微错位。</li>
+      </ul>
+
+      <h3>② GRPO 自模仿学习是怎么做的？（三步走，零额外真机成本！）</h3>
+      <div class="grid-2" style="margin: 14px 0">
+        <div style="background:var(--si-bg);border:1px solid rgba(118,185,0,0.35);border-radius:12px;padding:16px">
+          <strong style="color:var(--si-ink)">第一步：淘金（筛选成功探索库 D<sub>succ</sub>）</strong>
+          <p style="font-size:14px;margin:6px 0 0"><strong>不需要再开动真机跑哪怕一秒钟！</strong>直接把刚才训练最强 GRPO 模型的全过程中，机器人自己在真机上摸索出来的所有<strong>成功轨迹（$R=1$）</strong>全部挑出来，组成精英数据集 $\mathcal{D}_{\text{succ}}$。</p>
+        </div>
+        <div style="background:var(--si-bg);border:1px solid rgba(118,185,0,0.35);border-radius:12px;padding:16px">
+          <strong style="color:var(--si-ink)">第二步：重炉精炼（回到 SFT 起点做联合流匹配）</strong>
+          <p style="font-size:14px;margin:6px 0 0"><strong>退回到最初那版干净的 SFT 初始权重</strong>，在精英成功库 $\mathcal{D}_{\text{succ}}$ 上，用 GR00T 2 原生最稳健的<strong>「视频 + 动作联合去噪监督损失」</strong>重新微调一轮！</p>
+        </div>
+      </div>
+
+      <div class="formula-box" style="--c: var(--si)">
+        <div class="eq">
+          &#x2112;<sub>SI</sub>(&theta;) = &lambda;<sub>v</sub> &middot; &#x2112;<sub>video</sub>(&theta; ; &#x1D49F;<sub>succ</sub>) + &lambda;<sub>a</sub> &middot; &#x2112;<sub>action</sub>(&theta; ; &#x1D49F;<sub>succ</sub>)
+        </div>
+        <div class="terms">
+          <div><code>&#x1D49F;<sub>succ</sub></code>：由 GRPO 在线探索发现、并经任务成功（$R=1$）筛选出的高质量真机轨迹</div>
+          <div><code>&#x2112;<sub>video</sub> + &#x2112;<sub>action</sub></code>：同时恢复完整的未来视频流匹配损失与全步动作流匹配损失，优化极其平滑稳定</div>
+        </div>
+      </div>
+
+      <p style="margin-bottom:0"><strong>🌟 一句话悟透它的精髓：</strong><br>
+      人类遥操作有延迟、手感隔着屏幕，很难演示出最顺滑的毫米级盲插巧劲；<strong>GRPO 负责当「敢死探险队」</strong>，通过真机碰撞试错自己悟出高成功率插法；<strong>自模仿学习负责当「总编纂官」</strong>，把探险队踩通的满分路线收集起来，扔掉所有失败噪声，用最干净的世界–动作联合监督把“视觉想象”和“肌肉记忆”完美焊死在一起！</p>
+    </div>
+  </section>
+
+  <!-- 第 6 节：AutoRL 彩蛋 -->
+  <section id="autorl">
+    <h2><span class="num">6</span>幕后功臣：这套 GRPO 配方竟是 AI 研究员「AutoRL」自己跑了 35 天发明的！</h2>
+    <div class="card">
+      <p>白皮书附录 F.2 披露了一个极其硬核的幕后故事：上面这套复杂的 GRPO 配方并不是人类研究员拍脑袋凑出来的，而是 NVIDIA 搭建了一个<strong>自主科研智能体系统 AutoRL</strong>，在 RoboCasa365 仿真基准上<strong>连续自主提出假设 → 改代码 → 提交集群训练 → 显著性检验迭代了 35 天（29 轮实验）</strong>一步步爬山发现的：</p>
+      <div class="timeline">
+        <div class="tl-item"><span class="gain">+1.6 pp</span><strong>第 1 步：权重锚定（Weight Anchor）+ 延长时域</strong> — 发现标准 PPO 一上来就把预训练权重训飘了，加上向初始权重的 $L_2$ 约束后止住退化。</div>
+        <div class="tl-item"><span class="gain">+3.5 pp</span><strong>第 2 步：砍掉 Critic 改用 GRPO</strong> — AutoRL 诊断日志发现 Critic 解释方差接近 0，果断删掉 Critic 换成组内相对优势（GRPO）。</div>
+        <div class="tl-item"><span class="gain">+6.5 pp</span><strong>第 3–4 步：阶段进度奖励 + 长短任务执行步数对齐</strong> — 修复长程任务训练步长（16）与评测步长（8）不一致导致的失配，平衡长短任务权重。</div>
+        <div class="tl-item"><span class="gain">+7.9 pp</span><strong>第 5–6 步：按相同初始场景与随机种子分组</strong> — 消除组内题目难度不一带来的优势噪声。</div>
+        <div class="tl-item"><span class="gain">+10.0 pp</span><strong>第 7 步：发明「跨轮次场景历史记忆表（Context Memory EMA）」</strong> — 彻底解决全胜/全败组优势归零问题，累计比基线暴涨 10 个百分点，随后直接搬上真机大获成功！</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 第 7 节：终极横向对比表 -->
+  <section id="compare">
+    <h2><span class="num">7</span>终极总结对照表（含白皮书全部 4 项真机任务完整数据）</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>对比维度</th>
+            <th>监督微调 (SFT)</th>
+            <th>残差强化学习 (Residual RL)</th>
+            <th>GRPO (在线直接 RL)</th>
+            <th>GRPO 自模仿学习</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>GR00T 2 参数是否更新？</strong></td>
+            <td>更新（模仿人类演示）</td>
+            <td><strong>完全冻结不改</strong>（只训外挂小网络）</td>
+            <td><strong>直接更新</strong>（通过 CPS 去噪似然）</td>
+            <td><strong>直接更新</strong>（从 SFT 起点重训一轮）</td>
+          </tr>
+          <tr>
+            <td><strong>需要 Critic 价值网络吗？</strong></td>
+            <td>不需要</td>
+            <td><strong>需要</strong>（SAC 集成双/多 Q 网络）</td>
+            <td><strong>不需要！</strong>（同组留一法 + 历史记忆表）</td>
+            <td><strong>不需要！</strong>（纯流匹配监督损失）</td>
+          </tr>
+          <tr>
+            <td><strong>训练用什么数据？</strong></td>
+            <td>人类遥操作演示</td>
+            <td>演示数据 + 真机交互（含人工辅助纠偏）</td>
+            <td>真机自主探索的<strong>成功 + 失败</strong>轨迹</td>
+            <td>直接复用 GRPO 攒下的<strong>成功轨迹</strong>（零新增采集）</td>
+          </tr>
+          <tr>
+            <td><strong>未来视频分支参与更新吗？</strong></td>
+            <td>参与</td>
+            <td>不参与（底座冻结）</td>
+            <td>推理时确定性生成，仅动作转移计入 RL 损失</td>
+            <td><strong>完整参与！</strong>（$\mathcal{L}_{\text{video}} + \mathcal{L}_{\text{action}}$ 联合巩固）</td>
+          </tr>
+          <tr>
+            <td><strong>任务 1：固定管路接头旋紧</strong></td>
+            <td class="num">66%</td>
+            <td class="num">76%</td>
+            <td class="num">86%</td>
+            <td class="num best">88%</td>
+          </tr>
+          <tr>
+            <td><strong>任务 2：网线水晶头插接</strong></td>
+            <td class="num">76%</td>
+            <td class="num">82%</td>
+            <td class="num">92%</td>
+            <td class="num best">94%</td>
+          </tr>
+          <tr>
+            <td><strong>任务 3：双孔充电器插接</strong></td>
+            <td class="num">40%</td>
+            <td class="num">70%</td>
+            <td class="num">94%</td>
+            <td class="num best">96%</td>
+          </tr>
+          <tr>
+            <td><strong>任务 4：手指插孔（白皮书图 5）</strong></td>
+            <td class="num">58%</td>
+            <td class="num">84%</td>
+            <td class="num">72%</td>
+            <td class="num best">98%</td>
+          </tr>
+          <tr>
+            <td><strong>最适合什么时候用？</strong></td>
+            <td>快速冷启动学新任务</td>
+            <td><strong>不想动通用大模型权重</strong>、只需局部毫米级微调时</td>
+            <td>需要大模型突破人类演示瓶颈、探索新动作策略时</td>
+            <td><strong>GRPO 探索完后的必做收官步</strong>：零成本提纯最高性能</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <div class="bottom-nav-bar">
+    <a class="home-back-pill" href="../index.html">← 返回 Reading Notes 博客首页</a>
+    <a class="home-back-pill green" href="nvidia-gr00t-2.html">阅读《NVIDIA GR00T 2 全景交互中文版与 8 大深度追问》 →</a>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ==================== 交互沙盘 1：充电器插接物理可视化模拟器 ==================== */
+  const canvas = document.getElementById("plugSim");
+  const ctx = canvas.getContext("2d");
+  const MODES = {
+    sft: {
+      title: "1. 监督微调 (SFT)",
+      paper: "40%",
+      param: "预训练后监督微调",
+      color: "#9ca3af",
+      desc: "SFT 沿着人类演示的平均轨迹向下插。当初始位置有轻微视觉误差（哪怕偏 1.5mm）撞到插座外壳台阶时，它没有学过「微移寻孔」动作，直接死顶在边缘卡住。",
+      key: "🔍 观察画面：灰色轨迹一旦偏出中心绿色插孔通道，碰到插座上沿就会直接停滞报错（红叉）。"
+    },
+    res: {
+      title: "2. 残差强化学习 (Residual RL)",
+      paper: "70%",
+      param: "冻结底座 + 训 SAC 小网络",
+      color: "#3d7fc7",
+      desc: "底座 GR00T 2 保持冻结（灰色虚线），外挂的蓝色残差小网络在靠近插孔时激活，在安全限幅盒 [-B, +B] 内实时输出横向纠偏偏移 o_j，把不少原本会撞边的轨迹拉回孔内！",
+      key: "🔍 观察画面：当初始偏差在蓝色限幅框以内时，小助手能成功纠偏滑入孔中；但若底座偏差超出了限幅框 [-B, +B]，小助手就鞭长莫及了。"
+    },
+    grpo: {
+      title: "3. GRPO 群组在线探索",
+      paper: "94%",
+      param: "直接更新 2B GR00T 2",
+      color: "#8cc63f",
+      desc: "通过 CPS 向动作去噪注入探索噪声，机器人自主摸索出「先贴面微探、顺势滑入插孔」的高鲁棒策略！大模型自身的主干轨迹已经学会主动向插孔中心收敛。",
+      key: "🔍 观察画面：带有轻微探索摆动的浅绿色轨迹能从较大偏差主动向孔口中心聚拢滑入，仅极少数因探索噪声过大擦边失败。"
+    },
+    si: {
+      title: "4. GRPO 自模仿学习 (Self-Imitation)",
+      paper: "96%",
+      param: "复用成功轨迹联合精炼 2B 模型",
+      color: "#76b900",
+      desc: "把 GRPO 探索出的成功轨迹挑出来，回到 SFT 起点用确定性的「视频+动作联合流匹配」重训一轮：既继承了 GRPO 悟出的寻孔巧劲，又去掉了 RL 探索抖动，轨迹又稳又准！",
+      key: "🔍 观察画面：深绿色轨迹平滑、果断、低方差地精准滑入插孔，拿下全场最高的 96% 成功率。"
+    }
+  };
+
+  let curMode = "sft";
+  let particles = [];
+  let animId = 0;
+
+  const socketX = 270, socketY = 248, holeHalf = 15, boundHalf = 36;
+
+  function setupMode(m) {
+    curMode = m;
+    const cfg = MODES[m];
+    document.getElementById("simTitle").textContent = cfg.title;
+    document.getElementById("simDesc").textContent = cfg.desc;
+    document.getElementById("simKeyPoint").textContent = cfg.key;
+    document.getElementById("paperSR").textContent = cfg.paper;
+    document.getElementById("simParam").textContent = cfg.param;
+    document.querySelectorAll(".sim-tab").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+    spawnBatch();
+  }
+
+  function spawnBatch() {
+    cancelAnimationFrame(animId);
+    // 固定一组具有代表性的初始横向偏差（涵盖小偏差、中等偏差、较大偏差共 8 条），让对比公平直观
+    const offsets = [-54, -38, -24, -10, 9, 22, 35, 50];
+    particles = offsets.map((dx, idx) => {
+      const startX = socketX + dx;
+      const startY = 44;
+      return {
+        idx, startX, x: startX, y: startY, baseX: startX,
+        path: [[startX, startY]], basePath: [[startX, startY]],
+        done: false, ok: false, t: 0, delay: idx * 5
+      };
+    });
+    document.getElementById("simHit").textContent = "运行中...";
+    tickSim();
+  }
+
+  function stepParticle(p) {
+    if (p.done) return;
+    if (p.delay > 0) { p.delay--; return; }
+    p.t++;
+    const err0 = p.startX - socketX;
+
+    if (curMode === "sft") {
+      // SFT 只有微弱向中趋势，偏差稍大就会撞上插座上沿 y=248
+      p.x += (-err0 * 0.0045);
+      p.y += 4.2;
+    } else if (curMode === "res") {
+      // 底座轨迹跟 SFT 一样，但靠近插座 (y > 130) 时残差小网络在 [-26, +26] 限幅内全力往孔中心拉
+      p.baseX += (-err0 * 0.0045);
+      p.y += 4.2;
+      const active = Math.max(0, Math.min(1, (p.y - 115) / 115));
+      const maxCorr = 24; // 残差限幅 B
+      const desiredCorr = - (p.baseX - socketX) * 0.92;
+      const clampedCorr = Math.max(-maxCorr, Math.min(maxCorr, desiredCorr));
+      p.x = p.baseX + active * clampedCorr;
+      p.basePath.push([p.baseX, p.y]);
+    } else if (curMode === "grpo") {
+      // GRPO 大模型自身已学会大幅向插座中心对准，但带有轻微 CPS 探索抖动（最外侧 1 条偶尔因抖动卡边）
+      const wave = Math.sin(p.t * 0.35 + p.idx * 1.7) * (p.idx === 0 ? 3.4 : 1.5);
+      const pull = (socketX - p.x) * (p.idx === 0 ? 0.031 : 0.068);
+      p.x += pull + wave * 0.45;
+      p.y += 4.2;
+    } else if (curMode === "si") {
+      // 自模仿：既拥有大模型全局对准能力，又去除了 CPS 噪声，平滑对准滑入
+      const pull = (socketX - p.x) * 0.078;
+      p.x += pull;
+      p.y += 4.3;
+    }
+
+    p.path.push([p.x, p.y]);
+
+    // 到达插座表面高度 y >= socketY
+    if (p.y >= socketY) {
+      if (Math.abs(p.x - socketX) <= holeHalf) {
+        // 对准插孔！继续往下插到底部 y = 292
+        p.x += (socketX - p.x) * 0.35;
+        if (p.y >= 292) { p.done = true; p.ok = true; }
+      } else {
+        // 撞在插座外壳台阶上卡死！
+        p.y = socketY - 2;
+        p.done = true; p.ok = false;
+      }
+    }
+  }
+
+  function drawSim() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 背景网格
+    ctx.strokeStyle = "rgba(255,255,255,0.04)";
+    ctx.lineWidth = 1;
+    for (let x = 30; x < 540; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 340); ctx.stroke(); }
+    for (let y = 30; y < 340; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(540, y); ctx.stroke(); }
+
+    // 若是残差 RL，画出残差安全限幅框 [-B, +B]
+    if (curMode === "res") {
+      ctx.save();
+      ctx.strokeStyle = "rgba(61, 127, 199, 0.55)";
+      ctx.fillStyle = "rgba(61, 127, 199, 0.08)";
+      ctx.setLineDash([5, 5]);
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(socketX - boundHalf, 120, boundHalf * 2, socketY - 120);
+      ctx.strokeRect(socketX - boundHalf, 120, boundHalf * 2, socketY - 120);
+      ctx.fillStyle = "#93c5fd";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("残差纠偏安全限幅盒 [-B, +B]", socketX + boundHalf + 8, 185);
+      ctx.restore();
+    }
+
+    // 插孔中心引导虚线
+    ctx.save();
+    ctx.strokeStyle = "rgba(118, 185, 0, 0.25)";
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(socketX, 24); ctx.lineTo(socketX, 305); ctx.stroke();
+    ctx.restore();
+
+    // 画插座本体与精准插孔通道
+    ctx.fillStyle = "#323946";
+    ctx.fillRect(90, socketY, 360, 68);
+    // 插座上沿高亮金属面板
+    ctx.fillStyle = "#4b5565";
+    ctx.fillRect(90, socketY, 180 - holeHalf, 6);
+    ctx.fillRect(socketX + holeHalf, socketY, 180 - holeHalf, 6);
+    // 插孔深槽
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(socketX - holeHalf, socketY, holeHalf * 2, 54);
+    // 底部通电触点
+    ctx.fillStyle = "#76b900";
+    ctx.fillRect(socketX - holeHalf + 3, 294, holeHalf * 2 - 6, 6);
+
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("插座外壳（碰到即卡阻失败）", 165, socketY + 34);
+    ctx.fillStyle = "#b9ec65";
+    ctx.fillText("插孔 (±1.5mm)", socketX, 326);
+    ctx.fillStyle = "#cbd5e1";
+    ctx.fillText("机械臂携带充电器插头从上方随机初始偏差处下降 ↓", socketX, 24);
+
+    // 画每条轨迹
+    for (const p of particles) {
+      if (curMode === "res" && p.basePath.length > 1) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(156, 163, 175, 0.32)";
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        p.basePath.forEach(([bx, by], i) => i ? ctx.lineTo(bx, by) : ctx.moveTo(bx, by));
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (p.path.length > 1) {
+        ctx.strokeStyle = p.done ? (p.ok ? "#76b900" : "#ef4444") : MODES[curMode].color;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        p.path.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
+        ctx.stroke();
+      }
+      // 终点状态标记
+      const [lx, ly] = p.path[p.path.length - 1];
+      ctx.beginPath();
+      ctx.arc(lx, ly, p.done ? 5 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = p.done ? (p.ok ? "#84cc16" : "#ef4444") : "#ffffff";
+      ctx.fill();
+    }
+  }
+
+  function tickSim() {
+    let allDone = true;
+    for (const p of particles) {
+      stepParticle(p);
+      if (!p.done) allDone = false;
+    }
+    drawSim();
+    if (!allDone) {
+      animId = requestAnimationFrame(tickSim);
+    } else {
+      const wins = particles.filter(p => p.ok).length;
+      document.getElementById("simHit").textContent = `${wins} / ${particles.length}`;
+    }
+  }
+
+  document.querySelectorAll(".sim-tab").forEach(btn => {
+    btn.addEventListener("click", () => setupMode(btn.dataset.mode));
+  });
+  document.getElementById("runSimBtn").addEventListener("click", spawnBatch);
+
+  /* ==================== 交互沙盘 2：GRPO 记忆基线优势计算器 ==================== */
+  let R = [1, 1, 0, 0];
+  const rBtns = Array.from(document.querySelectorAll(".r-btn"));
+  const mgSlider = document.getElementById("mgSlider");
+  const mgVal = document.getElementById("mgVal");
+  const advBars = document.getElementById("advBars");
+  const calcInsight = document.getElementById("calcInsight");
+
+  function updateCalc() {
+    const mg = +mgSlider.value / 100;
+    const h = +document.querySelector('input[name="hmode"]:checked').value;
+    mgVal.textContent = `${mgSlider.value}%`;
+
+    rBtns.forEach((b, i) => {
+      b.className = "r-btn " + (R[i] ? "win" : "lose");
+      b.innerHTML = `尝试 #${i + 1}<br><b>R = ${R[i]} (${R[i] ? "成功" : "失败"})</b>`;
+    });
+
+    const N = R.length;
+    const sumAll = R.reduce((a, b) => a + b, 0);
+    const advs = R.map((ri) => {
+      const sumOther = sumAll - ri;
+      const baseline = (h * mg + sumOther) / (h + N - 1);
+      return { ri, baseline, adv: ri - baseline };
+    });
+
+    advBars.innerHTML = advs.map((o, i) => {
+      const pct = Math.min(50, Math.abs(o.adv) * 50);
+      const left = o.adv >= 0 ? 50 : 50 - pct;
+      const col = Math.abs(o.adv) < 1e-6 ? "#9ca3af" : (o.adv > 0 ? "#76b900" : "#ef4444");
+      const sign = o.adv > 0 ? "+" : "";
+      return `<div class="adv-row">
+        <span>尝试 #${i + 1} (${o.ri})</span>
+        <div class="adv-track"><div class="adv-fill" style="left:${left}%;width:${ Math.max(1.5, pct) }%;background:${col}"></div></div>
+        <b style="text-align:right;font-variant-numeric:tabular-nums;color:${col}">${sign}${o.adv.toFixed(2)}</b>
+      </div>`;
+    }).join("");
+
+    const allZero = sumAll === 0, allOne = sumAll === N;
+    if ((allZero || allOne) && h === 0) {
+      calcInsight.innerHTML = `⚠️ <strong>梯度完全归零（死锁）！</strong>因为本轮 4 次全部${allZero ? "失败 (0)" : "成功 (1)"}，无记忆的普通 GRPO (h=0) 算出的组内基线等于自身，所有尝试的优势全为 <code>0.00</code>，模型学不到任何东西！试着切回左侧的 <strong>GR00T 2 记忆基线 (h = 2)</strong> 看看变化。`;
+    } else if (allZero && h > 0 && mg > 0) {
+      calcInsight.innerHTML = `✅ <strong>历史记忆救场成功！</strong>虽然本轮 4 次全败，但记忆表记得该场景过去成功率有 <b>${mgSlider.value}%</b>，因此每次失败都拿到了 <b>${advs[0].adv.toFixed(2)}</b> 的负向惩罚梯度，立刻把退化的策略拉回正轨！`;
+    } else if (allOne && h > 0 && mg < 1) {
+      calcInsight.innerHTML = `✅ <strong>历史记忆奖励突破！</strong>虽然本轮 4 次全胜（组内无差异），但相比过去仅 <b>${mgSlider.value}%</b> 的历史水平大幅进步，因此每次成功依然获得 <b>+${advs[0].adv.toFixed(2)}</b> 的正向激励信号！`;
+    } else {
+      calcInsight.innerHTML = `💡 当前基线 <code>b<sub>g,i</sub></code> 同时融合了其余 3 次同行表现与权重 <code>h=${h}</code> 的历史均值（${mgSlider.value}%）：成功尝试获得正优势被强化，失败尝试获得负优势被抑制。`;
+    }
+  }
+
+  rBtns.forEach(b => b.addEventListener("click", () => {
+    const i = +b.dataset.i;
+    R[i] = R[i] ? 0 : 1;
+    updateCalc();
+  }));
+  mgSlider.addEventListener("input", updateCalc);
+  document.querySelectorAll('input[name="hmode"]').forEach(r => r.addEventListener("change", updateCalc));
+  document.querySelectorAll(".preset-btn").forEach(b => b.addEventListener("click", () => {
+    const p = b.dataset.p;
+    if (p === "deg") { R = [0, 0, 0, 0]; mgSlider.value = 80; }
+    else if (p === "brk") { R = [1, 1, 1, 1]; mgSlider.value = 10; }
+    else { R = [1, 1, 0, 0]; mgSlider.value = 50; }
+    updateCalc();
+  }));
+
+  setupMode("sft");
+  updateCalc();
+})();
+</script>
+</body>
+</html>

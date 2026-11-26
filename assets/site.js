@@ -42,6 +42,28 @@
 
   const POSTS = [
     {
+      title: 'NVIDIA GR00T 2：世界–动作基础模型全景交互中文版与白皮书 8 大深度追问',
+      moduleKey: 'product',
+      moduleLabel: '07 · Product',
+      format: '全景解读',
+      date: '2026.11.26',
+      metaNote: '1:1 交互复刻 · 中英对照 · 8 大机制 Q&A',
+      summary:
+        '完整汉化复刻 NVIDIA GEAR GR00T 2 官方交互主页（含动态架构图、WebGL 预训练数据球、Agent 运行时与全套图表），并结合 135 页白皮书深入解答动作空间、Decoder 共享、跨本体 SFT、VLA 归因、OpenWAM 对比与 1-shot 微调底层机制。',
+      href: 'posts/nvidia-gr00t-2.html',
+    },
+    {
+      title: 'GR00T 2 真机强化学习深度图解：从 SFT、残差 RL 到 GRPO 与自模仿学习',
+      moduleKey: 'product',
+      moduleLabel: '07 · Product',
+      format: '交互教程',
+      date: '2026.11.26',
+      metaNote: '2D 插接碰撞沙盘 · GRPO 历史记忆计算器 · AutoRL',
+      summary:
+        '聚焦 GR00T 2 富接触插接成功率从 40% 跃升至 96% 的后训练秘诀：对比冻结底座的残差 RL 与直接进化 2B 扩散模型的 GRPO（CPS 动作加噪 + 场景历史记忆基线）及零额外真机损耗的自模仿提纯。',
+      href: 'posts/gr00t-2-rl-tutorial.html',
+    },
+    {
       title: '电机控制模式深度全解：从手臂直觉、三环架构到 CiA 402 与 MIT 力控',
       moduleKey: 'hardware',
       moduleLabel: '04 · 硬件',
